@@ -10,8 +10,8 @@ export type Voter = {
   house: string;
   voterId: string;
   ward: number;
-  votedAt?: string;
-  votedBy?: string;
+  votedAt?: string | undefined;
+  votedBy?: string | undefined;
 };
 export type Ward = { number: number; name: string; booth: string };
 export type AppUser = { id: string; name: string; loginId: string; role: "Admin" | "User"; wards: number[]; active: boolean; lastLogin: string };

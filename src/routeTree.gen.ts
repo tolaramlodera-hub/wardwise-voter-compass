@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as EntryRouteImport } from './routes/entry'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PendingRouteImport } from './routes/pending'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as UsersRouteImport } from './routes/users'
@@ -38,6 +39,11 @@ const EntryRoute = EntryRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PendingRoute = PendingRouteImport.update({
@@ -78,6 +84,9 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/pending': typeof PendingRoute
   '/reports': typeof ReportsRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/users': typeof UsersRoute
   '/voted': typeof VotedRoute
   '/voters': typeof VotersRoute
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending'
     | '/reports'
+    | '/reset-password'
     | '/users'
     | '/voted'
     | '/voters'
@@ -154,6 +164,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PendingRoute: typeof PendingRoute
   ReportsRoute: typeof ReportsRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   UsersRoute: typeof UsersRoute
   VotedRoute: typeof VotedRoute
   VotersRoute: typeof VotersRoute
@@ -195,6 +206,13 @@ declare module '@tanstack/react-router' {
       path: '/pending'
       fullPath: '/pending'
       preLoaderRoute: typeof PendingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports': {
@@ -242,6 +260,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PendingRoute: PendingRoute,
   ReportsRoute: ReportsRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   UsersRoute: UsersRoute,
   VotedRoute: VotedRoute,
   VotersRoute: VotersRoute,

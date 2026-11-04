@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, Upload, FileSpreadsheet, Pencil, X, Save, LoaderCircle } from "lucide-react";
+import { Search, Pencil, X, Save, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, Card, WardSelect, inputCls, btnOutline, btnPrimary } from "@/components/AppShell";
 import { VoterTable } from "@/components/VoterTable";

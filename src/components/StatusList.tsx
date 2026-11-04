@@ -25,6 +25,8 @@ export function StatusList({ voted }: { voted: boolean }) {
   const [ward, setWard] = useState(0);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -41,7 +43,7 @@ export function StatusList({ voted }: { voted: boolean }) {
 
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
-          .select("is_active")
+          .select("is_active,role")
           .eq("user_id", user.id)
           .maybeSingle();
         if (profileError) throw profileError;
@@ -49,6 +51,7 @@ export function StatusList({ voted }: { voted: boolean }) {
           if (active) setRows([]);
           return;
         }
+        if (active) setIsAdmin(String(profile.role ?? "").toLowerCase() === "admin");
 
         let query = supabase
           .from("voters")
@@ -71,6 +74,21 @@ export function StatusList({ voted }: { voted: boolean }) {
     void load();
     return () => { active = false; };
   }, [supabase, ward]);
+
+  const removeVote = async (voter: Voter) => {
+    if (!isAdmin || !window.confirm(`क्या आप ${voter.name} का दर्ज वोट वापस हटाना चाहते हैं? मतदाता का विवरण सुरक्षित रहेगा।`)) return;
+    setRemovingId(voter.id);
+    try {
+      const { error } = await supabase.from("attendance").delete().eq("voter_id", voter.id);
+      if (error) throw error;
+      setRows((current) => current.map((row) => row.id === voter.id ? { ...row, attendance: [] } : row));
+      toast.success("वोट एंट्री वापस हटा दी गई। मतदाता Pending सूची में आ गया है।");
+    } catch (error) {
+      toast.error("वोट वापस नहीं हट सका: " + (error instanceof Error ? error.message : "कृपया दोबारा प्रयास करें"));
+    } finally {
+      setRemovingId(null);
+    }
+  };
 
   const all = rows.map((v) => {
     const attendance = Array.isArray(v.attendance) ? v.attendance : [];
@@ -103,7 +121,7 @@ export function StatusList({ voted }: { voted: boolean }) {
     </div>
     <Card>
       <div className="flex flex-wrap gap-2 border-b p-4"><WardSelect value={ward} onChange={setWard} /><div className="relative min-w-48 flex-1"><Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input value={q} onChange={e => setQ(e.target.value)} className={inputCls + " pl-9"} placeholder="नाम या वोटर ID से खोजें" /></div></div>
-      {loading ? <div className="p-8 text-center"><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></div> : <VoterTable voters={filtered} showVote={voted} />}
+      {loading ? <div className="p-8 text-center"><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></div> : <VoterTable voters={filtered} showVote={voted} action={voted && isAdmin ? (v) => <button type="button" disabled={removingId === v.id} onClick={() => void removeVote(v)} className="rounded-lg border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive disabled:opacity-50">{removingId === v.id ? "हटा रहे हैं…" : "वोट वापस हटाएँ"}</button> : undefined} />}
     </Card>
   </>;
 }

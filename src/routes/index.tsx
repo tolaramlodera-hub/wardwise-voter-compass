@@ -37,8 +37,9 @@ function Dashboard() {
       ]);
       if (voterError || wardError) { toast.error("डैशबोर्ड डेटा लोड नहीं हुआ"); return; }
       const list = wardRows ?? [];
-      const wardStats = list.map(w => { const own = (voters ?? []).filter(v => v.ward_id === w.id); const voted = own.filter(v => Array.isArray(v.attendance) && v.attendance.length > 0).length; return { number:w.ward_number,total:own.length,voted,pending:own.length-voted,pct:own.length?Math.round(voted/own.length*1000)/10:0 }; });
-      const total = (voters ?? []).length, voted = (voters ?? []).filter(v => Array.isArray(v.attendance) && v.attendance.length > 0).length;
+      const hasAttendance = (attendance: unknown) => Array.isArray(attendance) ? attendance.length > 0 : Boolean(attendance);
+      const wardStats = list.map(w => { const own = (voters ?? []).filter(v => v.ward_id === w.id); const voted = own.filter(v => hasAttendance(v.attendance)).length; return { number:w.ward_number,total:own.length,voted,pending:own.length-voted,pct:own.length?Math.round(voted/own.length*1000)/10:0 }; });
+      const total = (voters ?? []).length, voted = (voters ?? []).filter(v => hasAttendance(v.attendance)).length;
       if (active) setStats({ total, voted, pending:total-voted, wards:wardStats });
     };
     void load();

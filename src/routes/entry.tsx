@@ -71,7 +71,8 @@ function Entry() {
   };
 
   return <AppShell title="वोटिंग एंट्री">
-    <div className="grid gap-4 lg:grid-cols-[1fr_380px]">\n      {current && <Card className="p-5 lg:hidden">
+    <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
+      {current && <Card className="p-5 lg:hidden">
         {!current ? <div className="py-10 text-center text-sm text-muted-foreground">विवरण देखने के लिए सूची से मतदाता चुनें</div> : <div>
           <h2 className="text-xl font-bold">{current.full_name}</h2>
           <dl className="mt-3 grid grid-cols-2 gap-y-2 text-sm">{[["पिता/पति",current.relative_name ?? "—"],["उम्र",current.age ?? "—"],["लिंग",current.gender ?? "—"],["मकान नं.",current.house_number ?? "—"],["वोटर ID",current.voter_id ?? "—"],["वार्ड",current.wards?.ward_number ?? ward]].map(([k,v]) => <div key={String(k)}><dt className="text-xs text-muted-foreground">{k}</dt><dd className="font-medium">{v}</dd></div>)}</dl>

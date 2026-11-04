@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Lock, Mail, ShieldCheck } from "lucide-react";
 import { btnPrimary, inputCls } from "@/components/AppShell";
@@ -15,9 +15,20 @@ function ResetPassword() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [sent, setSent] = useState(false);
-  const [recoveryMode, setRecoveryMode] = useState(
-    typeof window !== "undefined" && window.location.hash.includes("access_token=")
-  );
+  const [recoveryMode, setRecoveryMode] = useState(false);
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
+    });
+    void supabase.auth.getSession().then(({ data }) => {
+      if (data.session && typeof window !== "undefined" && (window.location.hash.includes("access_token=") || new URLSearchParams(window.location.search).has("code"))) {
+        setRecoveryMode(true);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 

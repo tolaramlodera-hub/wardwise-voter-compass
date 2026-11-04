@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { Search, Upload, FileSpreadsheet, Plus, Pencil, X, Save, LoaderCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Search, Upload, FileSpreadsheet, Pencil, X, Save, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, Card, WardSelect, inputCls, btnOutline, btnPrimary } from "@/components/AppShell";
 import { VoterTable } from "@/components/VoterTable";
@@ -55,21 +55,21 @@ function Voters() {
   const [editing, setEditing] = useState<EditForm | null>(null);
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
 
-  const loadVoters = async () => {
+  const loadVoters = useCallback(async () => {
     setLoading(true);
     let query = supabase
       .from("voters")
       .select("id,voter_id,serial_no,full_name,relative_name,age,gender,house_number,wards!inner(ward_number)", { count: "exact" })
       .order("serial_no", { ascending: true, nullsFirst: false });
     if (ward) query = query.eq("wards.ward_number", ward);
-    const term = q.trim().replace(/[,%()]/g, " ").replace(/\\s+/g, " ");
+    const term = q.trim().replace(/[,.%()]/g, " ").replace(/\s+/g, " ").slice(0, 80);
     if (term) {
       const clauses = [
         "full_name.ilike.%" + term + "%",
         "voter_id.ilike.%" + term + "%",
         "house_number.ilike.%" + term + "%",
       ];
-      if (/^\\d+$/.test(term)) clauses.push("serial_no.eq." + Number(term));
+      if (/^\d+$/.test(term)) clauses.push("serial_no.eq." + Number(term));
       query = query.or(clauses.join(","));
     }
     const { data, count, error } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
@@ -92,7 +92,7 @@ function Voters() {
       ward: v.wards?.ward_number ?? 0,
     })));
     setLoading(false);
-  };
+  }, [supabase, ward, q, page]);
 
   useEffect(() => {
     let active = true;
@@ -108,7 +108,7 @@ function Voters() {
     return () => { active = false; };
   }, [supabase]);
 
-  useEffect(() => { void loadVoters(); }, [supabase, ward, q, page]);
+  useEffect(() => { void loadVoters(); }, [loadVoters]);
 
   const list = voters;
 

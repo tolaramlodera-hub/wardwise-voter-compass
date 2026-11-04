@@ -112,7 +112,7 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
 }
 
 export function WardSelect({ value, onChange, allLabel = "सभी वार्ड" }: { value: number; onChange: (n: number) => void; allLabel?: string | null }) {
-  return <select value={value} onChange={(e) => onChange(Number(e.target.value))} className="h-11 rounded-lg border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">{allLabel && <option value={0}>{allLabel}</option>}{Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>वार्ड {i + 1}</option>)}</select>;
+  return <select value={value} onChange={(e) => onChange(Number(e.target.value))} className="h-11 rounded-lg border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">{allLabel && <option value={0}>{allLabel}</option>}{Array.from({ length: 7 }, (_, i) => <option key={i} value={i + 1}>वार्ड {i + 1}</option>)}</select>;
 }
 
 export const inputCls = "h-11 w-full rounded-lg border bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring";

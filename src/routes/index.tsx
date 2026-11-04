@@ -23,6 +23,14 @@ function Dashboard() {
   useEffect(() => {
     let active = true;
     const load = async () => {
+      // The dashboard route can render briefly before AppShell redirects an anonymous visitor.
+      // Do not query RLS-protected voter tables until an active authenticated profile is confirmed.
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) return;
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles").select("is_active").eq("user_id", user.id).maybeSingle();
+      if (profileError || !profile?.is_active) return;
+
       const [{ data: voters, error: voterError }, { data: wardRows, error: wardError }] = await Promise.all([
         supabase.from("voters").select("id,ward_id,attendance(id)"),
         supabase.from("wards").select("id,ward_number,name").eq("is_active", true).lte("ward_number", 7).order("ward_number")

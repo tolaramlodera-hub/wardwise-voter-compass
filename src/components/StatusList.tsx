@@ -20,6 +20,8 @@ type Row = {
   attendance: { recorded_at: string; recorded_by: string }[] | null;
 };
 
+const BATCH_SIZE = 200;
+
 export function StatusList({ voted }: { voted: boolean }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [rows, setRows] = useState<Row[]>([]);
@@ -53,32 +55,39 @@ export function StatusList({ voted }: { voted: boolean }) {
         }
         if (active) setIsAdmin(String(profile.role ?? "").toLowerCase() === "admin");
 
-        // Load voters and attendance separately so an embedded relation/RLS join
-        // cannot silently hide recorded votes from the status list.
-        let query = supabase
-          .from("voters")
-          .select("id,serial_no,full_name,relative_name,age,gender,house_number,voter_id,wards!inner(ward_number)")
-          .order("serial_no", { ascending: true, nullsFirst: false });
-        if (ward) query = query.eq("wards.ward_number", ward);
-        const { data, error } = await query;
-        if (error) throw error;
-        const voterRows = (data ?? []) as unknown as Row[];
-        const voterIds = voterRows.map((v) => v.id);
-        let attendanceByVoter = new Map<string, AttendanceRow[]>();
-        if (voterIds.length) {
-          const { data: attendanceData, error: attendanceError } = await supabase
+        // Page voter records to stay below the API row limit for "all wards".
+        const voterRows: Row[] = [];
+        for (let offset = 0; ; offset += BATCH_SIZE) {
+          let query = supabase
+            .from("voters")
+            .select("id,serial_no,full_name,relative_name,age,gender,house_number,voter_id,wards!inner(ward_number)")
+            .order("serial_no", { ascending: true, nullsFirst: false })
+            .range(offset, offset + BATCH_SIZE - 1);
+          if (ward) query = query.eq("wards.ward_number", ward);
+          const { data, error } = await query;
+          if (error) throw error;
+          const batch = (data ?? []) as unknown as Row[];
+          voterRows.push(...batch);
+          if (batch.length < BATCH_SIZE) break;
+        }
+
+        // Query attendance in small ID groups; large .in() URLs can fail on mobile.
+        const attendanceByVoter = new Map<string, AttendanceRow[]>();
+        for (let offset = 0; offset < voterRows.length; offset += BATCH_SIZE) {
+          const ids = voterRows.slice(offset, offset + BATCH_SIZE).map((v) => v.id);
+          const { data, error } = await supabase
             .from("attendance")
             .select("voter_id,recorded_at,recorded_by")
-            .in("voter_id", voterIds)
+            .in("voter_id", ids)
             .order("recorded_at", { ascending: false });
-          if (attendanceError) throw attendanceError;
-          attendanceByVoter = new Map<string, AttendanceRow[]>();
-          for (const entry of (attendanceData ?? []) as AttendanceRow[]) {
+          if (error) throw error;
+          for (const entry of (data ?? []) as AttendanceRow[]) {
             const existing = attendanceByVoter.get(entry.voter_id) ?? [];
             existing.push(entry);
             attendanceByVoter.set(entry.voter_id, existing);
           }
         }
+
         if (active) setRows(voterRows.map((v) => ({
           ...v,
           attendance: attendanceByVoter.get(v.id) ?? [],
@@ -86,7 +95,10 @@ export function StatusList({ voted }: { voted: boolean }) {
       } catch (error) {
         if (active) {
           setRows([]);
-          toast.error("सूची लोड नहीं हुई: " + (error instanceof Error ? error.message : "कृपया दोबारा प्रयास करें"));
+          const message = error && typeof error === "object" && "message" in error
+            ? String(error.message)
+            : error instanceof Error ? error.message : "कृपया दोबारा प्रयास करें";
+          toast.error("सूची लोड नहीं हुई: " + message);
         }
       } finally {
         if (active) setLoading(false);

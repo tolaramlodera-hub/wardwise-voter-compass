@@ -19,7 +19,7 @@ export type Ward = { number: number; name: string; booth: string };
 export type AppUser = { id: string; name: string; loginId: string; role: "Admin" | "User"; wards: number[]; active: boolean; lastLogin: string };
 export type Audit = { time: string; user: string; action: string; detail: string };
 
-export const wards: Ward[] = Array.from({ length: 12 }, (_, i) => ({
+export const wards: Ward[] = Array.from({ length: 7 }, (_, i) => ({
   number: i + 1,
   name: `वार्ड ${i + 1}`,
   booth: `बूथ ${101 + i}`,

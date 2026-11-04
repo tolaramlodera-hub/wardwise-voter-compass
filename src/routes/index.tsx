@@ -41,7 +41,19 @@ function Dashboard() {
       const total = (voters ?? []).length, voted = (voters ?? []).filter(v => Array.isArray(v.attendance) && v.attendance.length > 0).length;
       if (active) setStats({ total, voted, pending:total-voted, wards:wardStats });
     };
-    void load(); return () => { active = false; };
+    void load();
+    const refreshOnReturn = () => { if (document.visibilityState === "visible") void load(); };
+    window.addEventListener("focus", refreshOnReturn);
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    const channel = supabase.channel("dashboard-attendance-refresh")
+      .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, () => { void load(); })
+      .subscribe();
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refreshOnReturn);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+      void supabase.removeChannel(channel);
+    };
   }, [supabase]);
   const pct = stats.total ? Math.round(stats.voted / stats.total * 1000) / 10 : 0;
   return <AppShell title="मुख्य डैशबोर्ड">

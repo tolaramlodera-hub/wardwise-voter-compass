@@ -68,7 +68,7 @@ export function VoterCsvImport({ wardNumber, onComplete }: Props) {
         const ageValue = val(ageIdx);
         const age = ageValue ? Number(ageValue) : null;
         const genderValue = val(genderIdx);
-        const gender = genderValue.includes("महिला") ? "महिला" : genderValue.includes("पुरुष") ? "पुरुष" : genderValue ? "अन्य" : null;
+        const gender: ImportRow["gender"] = genderValue.includes("महिला") ? "महिला" : genderValue.includes("पुरुष") ? "पुरुष" : genderValue ? "अन्य" : null;
         return {
           rowNumber: index + 2,
           record: {

@@ -6,7 +6,18 @@ import { VoterTable } from "@/components/VoterTable";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Voter } from "@/lib/mock-data";
 
-type Row = { id: string; serial_no: number | null; full_name: string; relative_name: string | null; age: number | null; gender: "पुरुष" | "महिला" | "अन्य" | null; house_number: string | null; voter_id: string; wards: { ward_number: number } | null; attendance: { recorded_at: string; recorded_by: string }[] };
+type Row = {
+  id: string;
+  serial_no: number | null;
+  full_name: string;
+  relative_name: string | null;
+  age: number | null;
+  gender: "पुरुष" | "महिला" | "अन्य" | null;
+  house_number: string | null;
+  voter_id: string | null;
+  wards: { ward_number: number } | null;
+  attendance: { recorded_at: string; recorded_by: string }[] | null;
+};
 
 export function StatusList({ voted }: { voted: boolean }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -14,25 +25,77 @@ export function StatusList({ voted }: { voted: boolean }) {
   const [ward, setWard] = useState(0);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     let active = true;
     const load = async () => {
       setLoading(true);
-      let query = supabase.from("voters").select("id,serial_no,full_name,relative_name,age,gender,house_number,voter_id,wards!inner(ward_number),attendance(recorded_at,recorded_by)").order("serial_no", { ascending: true });
-      if (ward) query = query.eq("wards.ward_number", ward);
-      const { data, error } = await query;
-      if (!active) return;
-      if (error) toast.error("सूची लोड नहीं हुई: " + error.message);
-      else setRows((data ?? []) as unknown as Row[]);
-      setLoading(false);
+      try {
+        // Wait for a valid signed-in user before querying tables protected by RLS.
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError;
+        if (!user) {
+          if (active) setRows([]);
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("is_active")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (profileError) throw profileError;
+        if (!profile?.is_active) {
+          if (active) setRows([]);
+          return;
+        }
+
+        let query = supabase
+          .from("voters")
+          .select("id,serial_no,full_name,relative_name,age,gender,house_number,voter_id,wards!inner(ward_number),attendance(recorded_at,recorded_by)")
+          .order("serial_no", { ascending: true, nullsFirst: false });
+        if (ward) query = query.eq("wards.ward_number", ward);
+        const { data, error } = await query;
+        if (error) throw error;
+        if (active) setRows((data ?? []) as unknown as Row[]);
+      } catch (error) {
+        if (active) {
+          setRows([]);
+          toast.error("सूची लोड नहीं हुई: " + (error instanceof Error ? error.message : "कृपया दोबारा प्रयास करें"));
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
     };
+
     void load();
     return () => { active = false; };
   }, [supabase, ward]);
 
-  const all = rows.map(v => ({ id:v.id, serialNo:v.serial_no ?? undefined, name:v.full_name, relative:v.relative_name ?? "", age:v.age ?? 0, gender:v.gender ?? "अन्य", house:v.house_number ?? "", voterId:v.voter_id, ward:v.wards?.ward_number ?? 0, votedAt:v.attendance[0]?.recorded_at, votedBy:v.attendance[0]?.recorded_by } as Voter));
-  const filtered = all.filter(v => (!!v.votedAt) === voted && (!q || v.name.includes(q) || v.voterId.toLowerCase().includes(q.toLowerCase())));
-  const votedCount = all.filter(v => !!v.votedAt).length;
+  const all = rows.map((v) => {
+    const attendance = Array.isArray(v.attendance) ? v.attendance : [];
+    const latestAttendance = attendance[0];
+    return {
+      id: v.id,
+      serialNo: v.serial_no ?? undefined,
+      name: v.full_name,
+      relative: v.relative_name ?? "",
+      age: v.age ?? 0,
+      gender: v.gender ?? "अन्य",
+      house: v.house_number ?? "",
+      voterId: v.voter_id ?? "",
+      ward: v.wards?.ward_number ?? 0,
+      votedAt: latestAttendance?.recorded_at,
+      votedBy: latestAttendance?.recorded_by,
+    } as Voter;
+  });
+  const normalizedQuery = q.trim().toLowerCase();
+  const filtered = all.filter((v) =>
+    (!!v.votedAt) === voted &&
+    (!normalizedQuery || v.name.toLowerCase().includes(normalizedQuery) || (v.voterId ?? "").toLowerCase().includes(normalizedQuery))
+  );
+  const votedCount = all.filter((v) => !!v.votedAt).length;
+
   return <>
     <div className="mb-4 grid grid-cols-2 gap-3">
       <div className="rounded-xl bg-success/15 p-4"><div className="text-sm text-success">Voted</div><div className="font-display text-3xl font-bold">{votedCount}</div></div>

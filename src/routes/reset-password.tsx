@@ -59,7 +59,7 @@ function ResetPassword() {
         const refresh_token = params.get("refresh_token");
         if (access_token && refresh_token) {
           const { data, error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
-          if (!active && !sessionError) return;
+          if (!active) return;
           if (sessionError || !data.session) {
             setError("रीसेट लिंक मान्य नहीं है या उसकी समय-सीमा समाप्त हो गई है। कृपया नया लिंक मँगाएँ।");
             return;

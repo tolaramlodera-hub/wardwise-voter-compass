@@ -23,7 +23,7 @@ function Reports() {
  useEffect(() => { let active=true; const load=async()=> {
   const [{data:voters,error:ve},{data:wards,error:we}]=await Promise.all([supabase.from("voters").select("id,ward_id,attendance(id)"),supabase.from("wards").select("id,ward_number").eq("is_active",true).lte("ward_number",7).order("ward_number")]);
   if(ve||we){toast.error("रिपोर्ट लोड नहीं हुई");return;}
-  const result=(wards??[]).map(w=>{const own=(voters??[]).filter(v=>v.ward_id===w.id);const voted=own.filter(v=>Array.isArray(v.attendance)&&v.attendance.length>0).length;return {number:w.ward_number,total:own.length,voted,pending:own.length-voted,pct:own.length?Math.round(voted/own.length*1000)/10:0};});
+  const hasAttendance=(attendance:unknown)=>Array.isArray(attendance)?attendance.length>0:Boolean(attendance);\n  const result=(wards??[]).map(w=>{const own=(voters??[]).filter(v=>v.ward_id===w.id);const voted=own.filter(v=>hasAttendance(v.attendance)).length;return {number:w.ward_number,total:own.length,voted,pending:own.length-voted,pct:own.length?Math.round(voted/own.length*1000)/10:0};});
   if(active)setRows(result);
  };void load();return()=>{active=false;};},[supabase]);
  const all=rows.reduce((a,w)=>({total:a.total+w.total,voted:a.voted+w.voted,pending:a.pending+w.pending}),{total:0,voted:0,pending:0});

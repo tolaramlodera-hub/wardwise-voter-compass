@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, Upload, FileSpreadsheet, Pencil, X, Save, LoaderCircle } from "lucide-react";
+import { Search, Pencil, X, Save, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, Card, WardSelect, inputCls, btnOutline, btnPrimary } from "@/components/AppShell";
 import { VoterTable } from "@/components/VoterTable";
+import { VoterCsvImport } from "@/components/VoterCsvImport";
 import type { Voter } from "@/lib/mock-data";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -155,19 +156,7 @@ function Voters() {
 
   return (
     <AppShell title="मतदाता सूची">
-      <Card className="mb-4 border-dashed p-5">
-        <div className="flex flex-col items-start gap-4 md:flex-row md:items-center">
-          <div className="rounded-lg bg-secondary p-3"><FileSpreadsheet className="h-6 w-6 text-primary" /></div>
-          <div className="flex-1">
-            <div className="font-semibold">मतदाता सूची अपलोड करें</div>
-            <div className="text-sm text-muted-foreground">Excel (.xlsx, .csv) या PDF — अधिकृत सूची के कॉलम के अनुसार</div>
-          </div>
-          <label className={btnOutline + " h-11 cursor-pointer"}>
-            <Upload className="h-4 w-4" /> फाइल चुनें
-            <input type="file" accept=".xlsx,.xls,.csv,.pdf" className="hidden" onChange={(e) => e.target.files?.[0] && toast.info("फाइल इम्पोर्ट सुविधा अभी तैयार नहीं है")} />
-          </label>
-        </div>
-      </Card>
+      {canEdit && (ward > 0 ? <VoterCsvImport wardNumber={ward} onComplete={() => { setPage(0); void loadVoters(); }} /> : <Card className="mb-4 border-dashed p-5"><p className="text-sm text-muted-foreground">CSV अपलोड करने के लिए पहले ऊपर से एक वार्ड चुनें।</p></Card>)}
 
       <Card>
         <div className="flex flex-wrap gap-2 border-b p-4">

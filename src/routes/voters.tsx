@@ -9,7 +9,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type VoterRow = {
   id: string;
-  voter_id: string;
+  voter_id: string | null;
   serial_no: number | null;
   full_name: string;
   relative_name: string | null;
@@ -72,7 +72,7 @@ function Voters() {
       age: v.age ?? 0,
       gender: v.gender === "महिला" || v.gender === "अन्य" ? v.gender : "पुरुष",
       house: v.house_number ?? "",
-      voterId: v.voter_id,
+      voterId: v.voter_id ?? "",
       ward: v.wards?.ward_number ?? 0,
     })));
     setLoading(false);
@@ -106,14 +106,14 @@ function Voters() {
     if (!editing) return;
     const serialNo = Number(editing.serialNo);
     const age = editing.age ? Number(editing.age) : null;
-    if (!editing.name.trim() || !editing.voterId.trim() || !Number.isInteger(serialNo) || serialNo < 1 ||
+    if (!editing.name.trim() || !Number.isInteger(serialNo) || serialNo < 1 ||
         (age !== null && (!Number.isInteger(age) || age < 18 || age > 120))) {
-      toast.error("नाम, वोटर ID, सही सीरियल नंबर और उम्र जाँचें");
+      toast.error("नाम, सही सीरियल नंबर और उम्र जाँचें");
       return;
     }
     setSaving(true);
     const { error } = await supabase.from("voters").update({
-      voter_id: editing.voterId.trim(),
+      voter_id: editing.voterId.trim() || null,
       serial_no: serialNo,
       full_name: editing.name.trim(),
       relative_name: editing.relative.trim() || null,

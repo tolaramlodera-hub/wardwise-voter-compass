@@ -11,7 +11,7 @@ export const Route = createFileRoute("/login")({
 
 function Login() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -22,9 +22,11 @@ function Login() {
     setError("");
     try {
       const supabase = getSupabaseBrowserClient();
-      const result = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      const value = identifier.trim();
+      const email = value.includes("@") ? value.toLowerCase() : value.toLowerCase() + "@login.wardwise.local";
+      const result = await supabase.auth.signInWithPassword({ email, password });
       if (result.error || !result.data.user) {
-        setError("ईमेल या पासवर्ड सही नहीं है।");
+        setError("लॉगिन ID / ईमेल या पासवर्ड सही नहीं है।");
         return;
       }
       const profileResult = await supabase.from("profiles")
@@ -51,13 +53,13 @@ function Login() {
       </div>
       <form onSubmit={submit} className="space-y-3">
         <label className="block text-sm font-medium">ईमेल / लॉगिन ID
-          <div className="relative mt-1"><User className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input className={inputCls + " pl-9"} type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="रजिस्टर्ड ईमेल" autoComplete="username" /></div>
+          <div className="relative mt-1"><User className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input className={inputCls + " pl-9"} type="text" required value={identifier} onChange={e => setIdentifier(e.target.value)} placeholder="जैसे MOHANBABAWALE" autoComplete="username" /></div>
         </label>
         <label className="block text-sm font-medium">पासवर्ड
           <div className="relative mt-1"><Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input className={inputCls + " pl-9"} type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="पासवर्ड" autoComplete="current-password" /></div>
         </label>
         {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-        <button type="submit" disabled={busy || !email || !password} className={btnPrimary + " w-full"}>{busy ? "लॉगिन हो रहा है..." : "सुरक्षित लॉगिन"}</button>
+        <button type="submit" disabled={busy || !identifier.trim() || !password} className={btnPrimary + " w-full"}>{busy ? "लॉगिन हो रहा है..." : "सुरक्षित लॉगिन"}</button>
       </form>
       <p className="mt-4 text-center text-xs text-muted-foreground">केवल एडमिन द्वारा बनाए गए सक्रिय यूजर लॉगिन कर सकते हैं।</p>
     </div>

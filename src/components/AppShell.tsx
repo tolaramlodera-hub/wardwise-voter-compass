@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { LayoutDashboard, Map, Users, Vote, CheckCircle2, Clock, BarChart3, UserCog, ScrollText, LogOut, ShieldCheck, LoaderCircle } from "lucide-react";
+import { LayoutDashboard, Map, Users, Vote, CheckCircle2, Clock, BarChart3, UserCog, ScrollText, LogOut, ShieldCheck, LoaderCircle, Trash2 } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const nav = [
@@ -11,6 +11,7 @@ const nav = [
   { to: "/pending", label: "Pending सूची", icon: Clock },
   { to: "/reports", label: "वार्ड रिपोर्ट", icon: BarChart3 },
   { to: "/wards", label: "वार्ड मैनेजमेंट", icon: Map, adminOnly: true },
+  { to: "/data-admin", label: "डेटा प्रबंधन", icon: Trash2, adminOnly: true },
   { to: "/users", label: "यूजर मैनेजमेंट", icon: UserCog, adminOnly: true },
   { to: "/audit", label: "Audit Log", icon: ScrollText, adminOnly: true },
 ] as const;

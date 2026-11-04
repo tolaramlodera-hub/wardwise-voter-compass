@@ -6,6 +6,7 @@ on:
       - feature/supabase-secure-foundation
     paths:
       - package.json
+      - .github/workflows/prepare-supabase-deps.yml
   pull_request:
     branches:
       - main

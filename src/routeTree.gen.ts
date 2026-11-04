@@ -85,8 +85,6 @@ export interface FileRoutesByFullPath {
   '/pending': typeof PendingRoute
   '/reports': typeof ReportsRoute
   '/reset-password': typeof ResetPasswordRoute
-  '/reset-password': typeof ResetPasswordRoute
-  '/reset-password': typeof ResetPasswordRoute
   '/users': typeof UsersRoute
   '/voted': typeof VotedRoute
   '/voters': typeof VotersRoute
@@ -99,6 +97,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/pending': typeof PendingRoute
   '/reports': typeof ReportsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/users': typeof UsersRoute
   '/voted': typeof VotedRoute
   '/voters': typeof VotersRoute
@@ -112,6 +111,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/pending': typeof PendingRoute
   '/reports': typeof ReportsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/users': typeof UsersRoute
   '/voted': typeof VotedRoute
   '/voters': typeof VotersRoute
@@ -139,6 +139,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/pending'
     | '/reports'
+    | '/reset-password'
     | '/users'
     | '/voted'
     | '/voters'

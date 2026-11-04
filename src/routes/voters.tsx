@@ -46,6 +46,7 @@ function Voters() {
   const [voters, setVoters] = useState<Voter[]>([]);
   const [ward, setWard] = useState(0);
   const [q, setQ] = useState("");
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [totalRows, setTotalRows] = useState(0);
   const pageSize = 100;
@@ -62,7 +63,7 @@ function Voters() {
       .select("id,voter_id,serial_no,full_name,relative_name,age,gender,house_number,wards!inner(ward_number)", { count: "exact" })
       .order("serial_no", { ascending: true, nullsFirst: false });
     if (ward) query = query.eq("wards.ward_number", ward);
-    const term = q.trim().replace(/[,.%()]/g, " ").replace(/\s+/g, " ").slice(0, 80);
+    const term = search.trim().replace(/[,.%()]/g, " ").replace(/\s+/g, " ").slice(0, 80);
     if (term) {
       const clauses = [
         "full_name.ilike.%" + term + "%",
@@ -92,7 +93,7 @@ function Voters() {
       ward: v.wards?.ward_number ?? 0,
     })));
     setLoading(false);
-  }, [supabase, ward, q, page]);
+  }, [supabase, ward, search, page]);
 
   useEffect(() => {
     let active = true;
@@ -107,6 +108,11 @@ function Voters() {
     void init().catch((error) => toast.error(error instanceof Error ? error.message : "यूजर जाँच नहीं हुई"));
     return () => { active = false; };
   }, [supabase]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { setSearch(q); setPage(0); }, 250);
+    return () => window.clearTimeout(timer);
+  }, [q]);
 
   useEffect(() => { void loadVoters(); }, [loadVoters]);
 

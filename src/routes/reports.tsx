@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Download } from "lucide-react";
+import { Download, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, Card, btnOutline } from "@/components/AppShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -51,9 +51,9 @@ function Reports() {
  };
  return <AppShell title="वार्ड वार रिपोर्ट">
   <div className="mb-4 flex justify-end"><button className={btnOutline} onClick={downloadCsv}><Download className="h-4 w-4"/> डाउनलोड</button></div>
-  <Card className="overflow-hidden"><table className="w-full text-sm"><thead className="bg-primary text-left text-primary-foreground"><tr>{["वार्ड","कुल","वोटेड","बाकी","प्रतिशत"].map(h=><th key={h} className="px-3 py-3 font-medium md:px-5">{h}</th>)}</tr></thead><tbody>
-  {rows.map(w=><tr key={w.number} className="border-t"><td className="px-3 py-3 font-semibold md:px-5">वार्ड {w.number}</td><td className="px-3 py-3 md:px-5">{w.total}</td><td className="px-3 py-3 text-success md:px-5">{w.voted}</td><td className="px-3 py-3 md:px-5">{w.pending}</td><td className="px-3 py-3 md:px-5">{w.pct}%</td></tr>)}
-  <tr className="border-t-2 bg-muted font-bold"><td className="px-3 py-3 md:px-5">कुल</td><td className="px-3 py-3 md:px-5">{all.total}</td><td className="px-3 py-3 md:px-5">{all.voted}</td><td className="px-3 py-3 md:px-5">{all.pending}</td><td className="px-3 py-3 md:px-5">{pct}%</td></tr>
+  <Card className="overflow-hidden"><table className="w-full text-sm"><thead className="bg-primary text-left text-primary-foreground"><tr>{["वार्ड","कुल","वोटेड","बाकी","प्रतिशत","सूची"].map(h=><th key={h} className="px-3 py-3 font-medium md:px-5">{h}</th>)}</tr></thead><tbody>
+  {rows.map(w=><tr key={w.number} className="border-t"><td className="px-3 py-3 font-semibold md:px-5">वार्ड {w.number}</td><td className="px-3 py-3 md:px-5">{w.total}</td><td className="px-3 py-3 text-success md:px-5">{w.voted}</td><td className="px-3 py-3 md:px-5">{w.pending}</td><td className="px-3 py-3 md:px-5">{w.pct}%</td><td className="px-3 py-3 md:px-5"><a className={btnOutline + " inline-flex whitespace-nowrap"} href={`/voters?ward=${w.number}`}><Eye className="h-4 w-4"/> सूची देखें</a></td></tr>)}
+  <tr className="border-t-2 bg-muted font-bold"><td className="px-3 py-3 md:px-5">कुल</td><td className="px-3 py-3 md:px-5">{all.total}</td><td className="px-3 py-3 md:px-5">{all.voted}</td><td className="px-3 py-3 md:px-5">{all.pending}</td><td className="px-3 py-3 md:px-5">{pct}%</td><td className="px-3 py-3 md:px-5">—</td></tr>
   </tbody></table></Card>
  </AppShell>;
 }

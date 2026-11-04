@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 // The voter list stays empty until an authorized, official list is imported.
 export type Voter = {
   id: string;
+  serialNo?: number | undefined;
   name: string;
   relative: string;
   age: number;

@@ -19,15 +19,64 @@ function ResetPassword() {
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
+    let active = true;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
+      if (event === "PASSWORD_RECOVERY" && active) setRecoveryMode(true);
     });
-    void supabase.auth.getSession().then(({ data }) => {
-      if (data.session && typeof window !== "undefined" && (window.location.hash.includes("access_token=") || new URLSearchParams(window.location.search).has("code"))) {
+
+    const completeRecovery = async () => {
+      const url = new URL(window.location.href);
+      const hasRecoveryHash = url.hash.includes("access_token=");
+      const code = url.searchParams.get("code");
+
+      // The browser client may already have exchanged the PKCE code during
+      // initialization. Check for that session before attempting the exchange.
+      const { data: initialSession } = await supabase.auth.getSession();
+      if (!active) return;
+
+      if (initialSession.session && (hasRecoveryHash || code)) {
         setRecoveryMode(true);
+        return;
       }
+
+      // Explicitly exchange the recovery code when automatic URL detection
+      // did not create a session. This is required for PKCE recovery links.
+      if (code) {
+        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (!active) return;
+        if (exchangeError || !data.session) {
+          setError("रीसेट लिंक मान्य नहीं है या उसकी समय-सीमा समाप्त हो गई है। कृपया नया लिंक मँगाएँ।");
+          return;
+        }
+        setRecoveryMode(true);
+        return;
+      }
+
+      // Support recovery links that return tokens in the URL fragment.
+      if (hasRecoveryHash) {
+        const params = new URLSearchParams(url.hash.slice(1));
+        const access_token = params.get("access_token");
+        const refresh_token = params.get("refresh_token");
+        if (access_token && refresh_token) {
+          const { data, error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
+          if (!active) return;
+          if (sessionError || !data.session) {
+            setError("रीसेट लिंक मान्य नहीं है या उसकी समय-सीमा समाप्त हो गई है। कृपया नया लिंक मँगाएँ।");
+            return;
+          }
+          setRecoveryMode(true);
+        }
+      }
+    };
+
+    void completeRecovery().catch(() => {
+      if (active) setError("रीसेट लिंक खोलने में समस्या आई। कृपया नया लिंक मँगाएँ।");
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);

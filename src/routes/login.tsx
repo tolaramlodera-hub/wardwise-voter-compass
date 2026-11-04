@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ShieldCheck, Lock, User } from "lucide-react";
 import { btnPrimary, inputCls } from "@/components/AppShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -61,6 +61,7 @@ function Login() {
         {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
         <button type="submit" disabled={busy || !identifier.trim() || !password} className={btnPrimary + " w-full"}>{busy ? "लॉगिन हो रहा है..." : "सुरक्षित लॉगिन"}</button>
       </form>
+      <div className="mt-3 text-center"><Link to="/reset-password" className="text-sm font-medium text-primary underline-offset-4 hover:underline">पासवर्ड भूल गए?</Link></div>
       <p className="mt-4 text-center text-xs text-muted-foreground">केवल एडमिन द्वारा बनाए गए सक्रिय यूजर लॉगिन कर सकते हैं।</p>
     </div>
   </div>;

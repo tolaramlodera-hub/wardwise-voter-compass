@@ -10,33 +10,154 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuditRouteImport } from './routes/audit'
+import { Route as EntryRouteImport } from './routes/entry'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as PendingRouteImport } from './routes/pending'
+import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as UsersRouteImport } from './routes/users'
+import { Route as VotedRouteImport } from './routes/voted'
+import { Route as VotersRouteImport } from './routes/voters'
+import { Route as WardsRouteImport } from './routes/wards'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuditRoute = AuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EntryRoute = EntryRouteImport.update({
+  id: '/entry',
+  path: '/entry',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PendingRoute = PendingRouteImport.update({
+  id: '/pending',
+  path: '/pending',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UsersRoute = UsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VotedRoute = VotedRouteImport.update({
+  id: '/voted',
+  path: '/voted',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VotersRoute = VotersRouteImport.update({
+  id: '/voters',
+  path: '/voters',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WardsRoute = WardsRouteImport.update({
+  id: '/wards',
+  path: '/wards',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/audit': typeof AuditRoute
+  '/entry': typeof EntryRoute
+  '/login': typeof LoginRoute
+  '/pending': typeof PendingRoute
+  '/reports': typeof ReportsRoute
+  '/users': typeof UsersRoute
+  '/voted': typeof VotedRoute
+  '/voters': typeof VotersRoute
+  '/wards': typeof WardsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/audit': typeof AuditRoute
+  '/entry': typeof EntryRoute
+  '/login': typeof LoginRoute
+  '/pending': typeof PendingRoute
+  '/reports': typeof ReportsRoute
+  '/users': typeof UsersRoute
+  '/voted': typeof VotedRoute
+  '/voters': typeof VotersRoute
+  '/wards': typeof WardsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/audit': typeof AuditRoute
+  '/entry': typeof EntryRoute
+  '/login': typeof LoginRoute
+  '/pending': typeof PendingRoute
+  '/reports': typeof ReportsRoute
+  '/users': typeof UsersRoute
+  '/voted': typeof VotedRoute
+  '/voters': typeof VotersRoute
+  '/wards': typeof WardsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/audit'
+    | '/entry'
+    | '/login'
+    | '/pending'
+    | '/reports'
+    | '/users'
+    | '/voted'
+    | '/voters'
+    | '/wards'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/audit'
+    | '/entry'
+    | '/login'
+    | '/pending'
+    | '/reports'
+    | '/users'
+    | '/voted'
+    | '/voters'
+    | '/wards'
+  id:
+    | '__root__'
+    | '/'
+    | '/audit'
+    | '/entry'
+    | '/login'
+    | '/pending'
+    | '/reports'
+    | '/users'
+    | '/voted'
+    | '/voters'
+    | '/wards'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuditRoute: typeof AuditRoute
+  EntryRoute: typeof EntryRoute
+  LoginRoute: typeof LoginRoute
+  PendingRoute: typeof PendingRoute
+  ReportsRoute: typeof ReportsRoute
+  UsersRoute: typeof UsersRoute
+  VotedRoute: typeof VotedRoute
+  VotersRoute: typeof VotersRoute
+  WardsRoute: typeof WardsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +169,83 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/audit': {
+      id: '/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/entry': {
+      id: '/entry'
+      path: '/entry'
+      fullPath: '/entry'
+      preLoaderRoute: typeof EntryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pending': {
+      id: '/pending'
+      path: '/pending'
+      fullPath: '/pending'
+      preLoaderRoute: typeof PendingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/users': {
+      id: '/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof UsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/voted': {
+      id: '/voted'
+      path: '/voted'
+      fullPath: '/voted'
+      preLoaderRoute: typeof VotedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/voters': {
+      id: '/voters'
+      path: '/voters'
+      fullPath: '/voters'
+      preLoaderRoute: typeof VotersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wards': {
+      id: '/wards'
+      path: '/wards'
+      fullPath: '/wards'
+      preLoaderRoute: typeof WardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuditRoute: AuditRoute,
+  EntryRoute: EntryRoute,
+  LoginRoute: LoginRoute,
+  PendingRoute: PendingRoute,
+  ReportsRoute: ReportsRoute,
+  UsersRoute: UsersRoute,
+  VotedRoute: VotedRoute,
+  VotersRoute: VotersRoute,
+  WardsRoute: WardsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

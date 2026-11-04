@@ -48,7 +48,7 @@ function Entry() {
   useEffect(() => { void load(); }, [load]);
 
   const serialSearchActive = serialQuery.trim().length > 0;
-  const serialNumber = /^\\d+$/.test(serialQuery.trim()) ? Number(serialQuery.trim()) : null;
+  const serialNumber = /^\d+$/.test(serialQuery.trim()) ? Number(serialQuery.trim()) : null;
   const list = serialSearchActive
     ? (serialNumber === null ? [] : rows.filter(v => v.serial_no === serialNumber))
     : rows.filter(v => !q || (v.full_name ?? "").toLowerCase().includes(q.toLowerCase()) || (v.voter_id ?? "").toLowerCase().includes(q.toLowerCase()) || (v.house_number ?? "").toLowerCase().includes(q.toLowerCase()));

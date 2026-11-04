@@ -41,7 +41,19 @@ function Users() {
 
   const invoke = async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("admin-user-management", { body });
-    if (error) throw error;
+    if (error) {
+      // FunctionsHttpError carries the actual JSON response in context. Read it
+      // before falling back to the generic "non-2xx status code" message.
+      const context = (error as { context?: unknown }).context;
+      if (context instanceof Response) {
+        const payload = await context.clone().json().catch(() => null) as
+          | { error?: string; message?: string }
+          | null;
+        const detail = payload?.error || payload?.message;
+        if (detail) throw new Error(detail);
+      }
+      throw new Error(error.message || "सर्वर अनुरोध विफल हुआ");
+    }
     if (data?.error) throw new Error(data.error);
     return data;
   };
@@ -123,7 +135,7 @@ function Users() {
         <h2 className="text-lg font-bold">नया यूजर बनाएं</h2>
         <input name="name" required className={inputCls} placeholder="पूरा नाम" />
         <input name="login_id" required minLength={3} maxLength={40} pattern="[A-Za-z0-9][A-Za-z0-9._-]*" className={inputCls} placeholder="Login ID जैसे MOHANBABAWALE" autoCapitalize="characters" />
-        <input name="password" type="password" minLength={8} required className={inputCls} placeholder="कम से कम 8 अक्षर का पासवर्ड" />
+        <input name="password" type="password" minLength={8} required className={inputCls} placeholder="कम से कम 8 अक्षर का पासवर्ड" autoComplete="new-password" />
         <div className="text-sm font-medium">वार्ड आवंटित करें</div>
         <div className="grid grid-cols-4 gap-2">
           {Array.from({ length: 7 }, (_, i) => <label key={i + 1} className="flex items-center gap-2 rounded border p-2 text-sm"><input type="checkbox" name="ward" value={i + 1} />वार्ड {i + 1}</label>)}

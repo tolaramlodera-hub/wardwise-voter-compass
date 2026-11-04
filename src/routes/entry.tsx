@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { AppShell, Card, WardSelect, inputCls, btnPrimary } from "@/components/AppShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-type VoterRow = { id: string; full_name: string; relative_name: string | null; age: number | null; gender: string | null; house_number: string | null; voter_id: string; wards: { ward_number: number } | null; attendance: { recorded_at: string; recorded_by: string }[] };
+type VoterRow = { id: string; full_name: string; relative_name: string | null; age: number | null; gender: string | null; house_number: string | null; voter_id: string | null; wards: { ward_number: number } | null; attendance: { recorded_at: string; recorded_by: string }[] };
 
 export const Route = createFileRoute("/entry")({
   head: () => ({ meta: [{ title: "वोटिंग एंट्री — मतदान उपस्थिति दर्ज करें" }, { name: "description", content: "वार्ड चुनें, मतदाता खोजें और मतदान उपस्थिति दर्ज करें।" }] }),
@@ -34,7 +34,7 @@ function Entry() {
 
   useEffect(() => { void load(); }, [ward]);
 
-  const list = rows.filter(v => !q || v.full_name.includes(q) || v.voter_id.toLowerCase().includes(q.toLowerCase()) || (v.house_number ?? "").includes(q));
+  const list = rows.filter(v => !q || v.full_name.includes(q) || (v.voter_id ?? "").toLowerCase().includes(q.toLowerCase()) || (v.house_number ?? "").includes(q));
   const voted = rows.filter(v => v.attendance.length > 0).length;
   const current = selected ? rows.find(v => v.id === selected.id) ?? null : null;
 
@@ -57,7 +57,7 @@ function Entry() {
           <div className="relative"><Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input value={q} onChange={e => setQ(e.target.value)} className={inputCls + " pl-9"} placeholder="नाम, वोटर ID या मकान नंबर से खोजें" /></div>
         </div>
         {loading ? <div className="p-8 text-center"><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></div> : <ul className="max-h-[60vh] divide-y overflow-y-auto">
-          {list.map(v => <li key={v.id}><button onClick={() => { setSelected(v); setVerified(false); }} className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted ${current?.id===v.id ? "bg-secondary" : ""}`}><div><div className="font-medium">{v.full_name}</div><div className="text-xs text-muted-foreground">मकान {v.house_number ?? "—"} · <span className="font-mono">{v.voter_id}</span></div></div>{v.attendance.length ? <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs text-success">Voted</span> : <span className="rounded-full bg-warning/25 px-2 py-0.5 text-xs">Pending</span>}</button></li>)}
+          {list.map(v => <li key={v.id}><button onClick={() => { setSelected(v); setVerified(false); }} className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted ${current?.id===v.id ? "bg-secondary" : ""}`}><div><div className="font-medium">{v.full_name}</div><div className="text-xs text-muted-foreground">मकान {v.house_number ?? "—"} · <span className="font-mono">{v.voter_id ?? "—"}</span></div></div>{v.attendance.length ? <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs text-success">Voted</span> : <span className="rounded-full bg-warning/25 px-2 py-0.5 text-xs">Pending</span>}</button></li>)}
           {!list.length && <li className="p-6 text-center text-sm text-muted-foreground">इस वार्ड में कोई मतदाता नहीं मिला</li>}
         </ul>}
       </Card>

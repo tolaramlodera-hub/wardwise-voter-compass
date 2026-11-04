@@ -56,7 +56,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
           </div>
         </header>
         <div className="bg-warning/20 px-4 py-1.5 text-center text-xs text-warning-foreground md:px-8">
-          डिज़ाइन प्रीव्यू — नमूना डेटा। केवल मतदान उपस्थिति दर्ज होती है, किसे वोट दिया इसकी कोई जानकारी नहीं रखी जाती।
+          डिज़ाइन प्रीव्यू — अधिकृत मतदाता सूची अपलोड होने तक मतदाता डेटा खाली रहेगा। केवल मतदान उपस्थिति दर्ज होगी; किसे वोट दिया इसकी जानकारी नहीं रखी जाएगी।
         </div>
         <main className="flex-1 p-4 md:p-8">{children}</main>
       </div>

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ShieldCheck, Lock, User, Mail, KeyRound } from "lucide-react";
+import { ShieldCheck, Lock, User, Mail } from "lucide-react";
 import { btnPrimary, inputCls } from "@/components/AppShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -14,11 +14,35 @@ function Login() {
   const [mode, setMode] = useState<"password" | "otp">("otp");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
+  const [linkSent, setLinkSent] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const supabase = getSupabaseBrowserClient();
+    const completeMagicLinkLogin = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!active || !data.session) return;
+      const profileResult = await supabase.from("profiles")
+        .select("role,is_active").eq("user_id", data.session.user.id).maybeSingle();
+      if (!active) return;
+      if (profileResult.error || !profileResult.data?.is_active) {
+        await supabase.auth.signOut();
+        setError("यह यूजर सक्रिय नहीं है। एडमिन से संपर्क करें।");
+        return;
+      }
+      await navigate({ to: "/" });
+    };
+    void completeMagicLinkLogin();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session && active) {
+        void completeMagicLinkLogin();
+      }
+    });
+    return () => { active = false; subscription.unsubscribe(); };
+  }, [navigate]);
 
   const finishLogin = async (userId: string) => {
     const supabase = getSupabaseBrowserClient();
@@ -54,7 +78,7 @@ function Login() {
     }
   };
 
-  const sendOtp = async (event: React.FormEvent<HTMLFormElement>) => {
+  const sendMagicLink = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true);
     setError("");
@@ -65,45 +89,22 @@ function Login() {
         setError("कृपया अपना रजिस्टर्ड ईमेल पता डालें।");
         return;
       }
-      const { error: otpError } = await getSupabaseBrowserClient().auth.signInWithOtp({
+      const { error: linkError } = await getSupabaseBrowserClient().auth.signInWithOtp({
         email,
-        options: { shouldCreateUser: false },
+        options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + "/login" },
       });
-      if (otpError) {
-        if (otpError.message.toLowerCase().includes("rate") || otpError.message.includes("429")) {
-          setError("ईमेल कोड भेजने की सीमा पूरी हुई है। कुछ समय बाद दोबारा प्रयास करें।");
+      if (linkError) {
+        if (linkError.message.toLowerCase().includes("rate") || linkError.message.includes("429")) {
+          setError("ईमेल भेजने की सीमा पूरी हुई है। कुछ समय बाद दोबारा प्रयास करें।");
         } else {
-          setError("लॉगिन कोड नहीं भेजा जा सका। ईमेल जाँचें या कुछ समय बाद प्रयास करें।");
+          setError("लॉगिन लिंक नहीं भेजा जा सका। ईमेल जाँचें या कुछ समय बाद प्रयास करें।");
         }
         return;
       }
-      setOtpSent(true);
-      setNotice("आपके रजिस्टर्ड ईमेल पर 6 अंकों का लॉगिन कोड भेजा गया है।");
+      setLinkSent(true);
+      setNotice("आपके रजिस्टर्ड ईमेल पर लॉगिन लिंक भेजा गया है। ईमेल खोलकर लिंक पर क्लिक करें।");
     } catch {
-      setError("ईमेल कोड भेजने में समस्या आई। कृपया बाद में प्रयास करें।");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const verifyOtp = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      const { data, error: verifyError } = await getSupabaseBrowserClient().auth.verifyOtp({
-        email: identifier.trim().toLowerCase(),
-        token: otp.trim(),
-        type: "email",
-      });
-      if (verifyError || !data.user) {
-        setError("लॉगिन कोड गलत या समाप्त हो गया है। नया कोड मँगाएँ।");
-        return;
-      }
-      await finishLogin(data.user.id);
-    } catch {
-      setError("कोड सत्यापित नहीं हो सका। कृपया दोबारा प्रयास करें।");
+      setError("लॉगिन लिंक भेजने में समस्या आई। कृपया बाद में प्रयास करें।");
     } finally {
       setBusy(false);
     }
@@ -123,18 +124,16 @@ function Login() {
       </div>
 
       {mode === "otp" ? (
-        <form onSubmit={otpSent ? verifyOtp : sendOtp} className="space-y-3">
-          <p className="text-sm text-muted-foreground">रजिस्टर्ड ईमेल पर आए 6 अंकों के कोड से सुरक्षित लॉगिन करें।</p>
+        <form onSubmit={sendMagicLink} className="space-y-3">
+          <p className="text-sm text-muted-foreground">रजिस्टर्ड ईमेल पर आए सुरक्षित लॉगिन लिंक से प्रवेश करें।</p>
           <label className="block text-sm font-medium">रजिस्टर्ड ईमेल
-            <div className="relative mt-1"><Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input className={inputCls + " pl-9"} type="email" required value={identifier} onChange={e => setIdentifier(e.target.value)} placeholder="name@gmail.com" autoComplete="email" disabled={otpSent} /></div>
+            <div className="relative mt-1"><Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input className={inputCls + " pl-9"} type="email" required value={identifier} onChange={e => setIdentifier(e.target.value)} placeholder="name@gmail.com" autoComplete="email" disabled={linkSent} /></div>
           </label>
-          {otpSent && <label className="block text-sm font-medium">ईमेल पर आया 6 अंकों का कोड
-            <div className="relative mt-1"><KeyRound className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input className={inputCls + " pl-9"} type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required value={otp} onChange={e => setOtp(e.target.value.replace(/\\D/g, "").slice(0, 6))} placeholder="123456" /></div>
-          </label>}
+
           {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
           {notice && <p role="status" className="rounded-lg bg-primary/10 p-3 text-sm text-primary">{notice}</p>}
-          <button type="submit" disabled={busy || !identifier.trim() || (otpSent && otp.length !== 6)} className={btnPrimary + " w-full"}>{busy ? "कृपया प्रतीक्षा करें..." : otpSent ? "कोड सत्यापित करके लॉगिन करें" : "ईमेल पर लॉगिन कोड भेजें"}</button>
-          {otpSent && <button type="button" onClick={() => { setOtpSent(false); setOtp(""); setError(""); setNotice(""); }} className="w-full text-sm font-medium text-primary underline">दूसरा ईमेल डालें</button>}
+          <button type="submit" disabled={busy || !identifier.trim() || linkSent} className={btnPrimary + " w-full"}>{busy ? "कृपया प्रतीक्षा करें..." : "ईमेल पर लॉगिन लिंक भेजें"}</button>
+          {linkSent && <button type="button" onClick={() => { setLinkSent(false); setError(""); setNotice(""); }} className="w-full text-sm font-medium text-primary underline">दूसरा ईमेल डालें</button>}
         </form>
       ) : (
         <form onSubmit={submitPassword} className="space-y-3">

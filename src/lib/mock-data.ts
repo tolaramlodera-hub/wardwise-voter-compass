@@ -38,13 +38,13 @@ for (const w of wards) {
   const count = 40 + Math.floor(seeded(w.number) * 30);
   for (let j = 0; j < count; j++) {
     const r = seeded(k * 7);
-    const f = first[Math.floor(r * first.length)];
+    const f = first[Math.floor(r * first.length)]!;
     const female = ["सीता", "गीता", "कमला", "सुनीता", "पूजा", "रेखा", "आशा", "किरण"].includes(f);
     const voted = seeded(k * 13) < 0.45;
     initialVoters.push({
       id: String(k),
-      name: `${f} ${last[Math.floor(seeded(k * 3) * last.length)]}`,
-      relative: fathers[Math.floor(seeded(k * 5) * fathers.length)],
+      name: `${f} ${last[Math.floor(seeded(k * 3) * last.length)]!}`,
+      relative: fathers[Math.floor(seeded(k * 5) * fathers.length)]!,
       age: 18 + Math.floor(seeded(k * 11) * 62),
       gender: female ? "महिला" : "पुरुष",
       house: `${w.number}-${1 + Math.floor(j / 3)}`,
@@ -104,7 +104,7 @@ export function revertVote(id: string) {
   if (!v?.votedAt) return;
   const t = now();
   state = {
-    voters: state.voters.map((x) => (x.id === id ? { ...x, votedAt: undefined, votedBy: undefined } : x)),
+    voters: state.voters.map((x) => (x.id === id ? ({ ...x, votedAt: undefined, votedBy: undefined } as Voter) : x)),
     audit: [{ time: t, user: "admin", action: "एंट्री वापस", detail: `वोटर ID ${v.voterId} की एंट्री हटाई` }, ...state.audit],
   };
   emit();

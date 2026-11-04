@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Voter } from "@/lib/mock-data";
 
-export function VoterTable({ voters, showVote, action }: { voters: Voter[]; showVote?: boolean; action?: (v: Voter) => ReactNode }) {
+export function VoterTable({ voters, showVote, action }: { voters: Voter[]; showVote?: boolean | undefined; action?: ((v: Voter) => ReactNode) | undefined }) {
   if (!voters.length) return <div className="p-8 text-center text-sm text-muted-foreground">कोई मतदाता नहीं मिला</div>;
   return (
     <>

@@ -27,13 +27,7 @@ export const wards: Ward[] = Array.from({ length: 12 }, (_, i) => ({
 // No dummy voters: the list is intentionally empty before official import.
 const initialVoters: Voter[] = [];
 
-export const users: AppUser[] = [
-  { id: "1", name: "मुख्य एडमिन", loginId: "admin", role: "Admin", wards: wards.map((w) => w.number), active: true, lastLogin: "—" },
-  { id: "2", name: "रमेश कुमार", loginId: "user1", role: "User", wards: [1, 2, 3], active: true, lastLogin: "—" },
-  { id: "3", name: "सुनीता देवी", loginId: "user2", role: "User", wards: [4, 5, 6], active: true, lastLogin: "—" },
-  { id: "4", name: "अजय मीणा", loginId: "user3", role: "User", wards: [7, 8, 9], active: true, lastLogin: "—" },
-  { id: "5", name: "पूजा शर्मा", loginId: "user4", role: "User", wards: [10, 11, 12], active: false, lastLogin: "—" },
-];
+export const users: AppUser[] = [];
 
 let state: { voters: Voter[]; audit: Audit[] } = { voters: initialVoters, audit: [] };
 const listeners = new Set<() => void>();

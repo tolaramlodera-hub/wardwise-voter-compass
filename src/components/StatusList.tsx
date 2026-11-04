@@ -6,6 +6,7 @@ import { VoterTable } from "@/components/VoterTable";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Voter } from "@/lib/mock-data";
 
+type AttendanceRow = { voter_id: string; recorded_at: string; recorded_by: string };
 type Row = {
   id: string;
   serial_no: number | null;
@@ -33,11 +34,10 @@ export function StatusList({ voted }: { voted: boolean }) {
     const load = async () => {
       setLoading(true);
       try {
-        // Wait for a valid signed-in user before querying tables protected by RLS.
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError) throw authError;
         if (!user) {
-          if (active) setRows([]);
+          if (active) { setRows([]); setIsAdmin(false); }
           return;
         }
 
@@ -48,19 +48,41 @@ export function StatusList({ voted }: { voted: boolean }) {
           .maybeSingle();
         if (profileError) throw profileError;
         if (!profile?.is_active) {
-          if (active) setRows([]);
+          if (active) { setRows([]); setIsAdmin(false); }
           return;
         }
         if (active) setIsAdmin(String(profile.role ?? "").toLowerCase() === "admin");
 
+        // Load voters and attendance separately so an embedded relation/RLS join
+        // cannot silently hide recorded votes from the status list.
         let query = supabase
           .from("voters")
-          .select("id,serial_no,full_name,relative_name,age,gender,house_number,voter_id,wards!inner(ward_number),attendance(recorded_at,recorded_by)")
+          .select("id,serial_no,full_name,relative_name,age,gender,house_number,voter_id,wards!inner(ward_number)")
           .order("serial_no", { ascending: true, nullsFirst: false });
         if (ward) query = query.eq("wards.ward_number", ward);
         const { data, error } = await query;
         if (error) throw error;
-        if (active) setRows((data ?? []) as unknown as Row[]);
+        const voterRows = (data ?? []) as unknown as Row[];
+        const voterIds = voterRows.map((v) => v.id);
+        let attendanceByVoter = new Map<string, AttendanceRow[]>();
+        if (voterIds.length) {
+          const { data: attendanceData, error: attendanceError } = await supabase
+            .from("attendance")
+            .select("voter_id,recorded_at,recorded_by")
+            .in("voter_id", voterIds)
+            .order("recorded_at", { ascending: false });
+          if (attendanceError) throw attendanceError;
+          attendanceByVoter = new Map<string, AttendanceRow[]>();
+          for (const entry of (attendanceData ?? []) as AttendanceRow[]) {
+            const existing = attendanceByVoter.get(entry.voter_id) ?? [];
+            existing.push(entry);
+            attendanceByVoter.set(entry.voter_id, existing);
+          }
+        }
+        if (active) setRows(voterRows.map((v) => ({
+          ...v,
+          attendance: attendanceByVoter.get(v.id) ?? [],
+        })));
       } catch (error) {
         if (active) {
           setRows([]);
@@ -91,8 +113,7 @@ export function StatusList({ voted }: { voted: boolean }) {
   };
 
   const all = rows.map((v) => {
-    const attendance = Array.isArray(v.attendance) ? v.attendance : [];
-    const latestAttendance = attendance[0];
+    const latestAttendance = Array.isArray(v.attendance) ? v.attendance[0] : undefined;
     return {
       id: v.id,
       serialNo: v.serial_no ?? undefined,

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { AppShell, Card, WardSelect, inputCls, btnPrimary } from "@/components/AppShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-type VoterRow = { id: string; full_name: string; relative_name: string | null; age: number | null; gender: string | null; house_number: string | null; voter_id: string | null; wards: { ward_number: number } | null; attendance: { recorded_at: string; recorded_by: string }[] };
+type VoterRow = { id: string; serial_no: number | null; full_name: string; relative_name: string | null; age: number | null; gender: string | null; house_number: string | null; voter_id: string | null; wards: { ward_number: number } | null; attendance: { recorded_at: string; recorded_by: string }[] };
 
 export const Route = createFileRoute("/entry")({
   head: () => ({ meta: [{ title: "वोटिंग एंट्री — मतदान उपस्थिति दर्ज करें" }, { name: "description", content: "वार्ड चुनें, मतदाता खोजें और मतदान उपस्थिति दर्ज करें।" }] }),
@@ -26,8 +26,8 @@ function Entry() {
     setLoading(true);
     try {
       const { data, error } = await supabase.from("voters")
-        .select("id,full_name,relative_name,age,gender,house_number,voter_id,wards!inner(ward_number),attendance(recorded_at,recorded_by)")
-        .eq("wards.ward_number", ward).order("serial_no", { ascending: true });
+        .select("id,serial_no,full_name,relative_name,age,gender,house_number,voter_id,wards!inner(ward_number),attendance(recorded_at,recorded_by)")
+        .eq("wards.ward_number", ward).order("serial_no", { ascending: true, nullsFirst: false });
       if (error) throw error;
       const normalized = (data ?? []).map((item: any) => ({
         ...item,
@@ -74,7 +74,7 @@ function Entry() {
     <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
       {current && <Card className="p-5 lg:hidden">
         {!current ? <div className="py-10 text-center text-sm text-muted-foreground">विवरण देखने के लिए सूची से मतदाता चुनें</div> : <div>
-          <h2 className="text-xl font-bold">{current.full_name}</h2>
+          <h2 className="flex items-center gap-2 text-xl font-bold"><span className="inline-flex h-7 min-w-7 items-center justify-center rounded border border-border bg-muted/50 px-1 text-xs font-semibold tabular-nums">{current.serial_no ?? "—"}</span>{current.full_name}</h2>
           <dl className="mt-3 grid grid-cols-2 gap-y-2 text-sm">{[["पिता/पति",current.relative_name ?? "—"],["उम्र",current.age ?? "—"],["लिंग",current.gender ?? "—"],["मकान नं.",current.house_number ?? "—"],["वोटर ID",current.voter_id ?? "—"],["वार्ड",current.wards?.ward_number ?? ward]].map(([k,v]) => <div key={String(k)}><dt className="text-xs text-muted-foreground">{k}</dt><dd className="font-medium">{v}</dd></div>)}</dl>
           {current.attendance.length ? <div className="mt-5 rounded-lg bg-success/15 p-3 text-sm text-success"><CheckCircle2 className="mr-1 inline h-4 w-4" /> एंट्री हो चुकी है। दोबारा एंट्री संभव नहीं।</div> : <div className="mt-5 space-y-3">
             <label className="flex items-start gap-2 rounded-lg border p-3 text-sm"><input type="checkbox" checked={verified} onChange={e => setVerified(e.target.checked)} className="mt-1" /> अधिकृत प्रक्रिया के अनुसार मतदाता की पहचान और पात्रता सत्यापित है।</label>
@@ -100,7 +100,7 @@ function Entry() {
           <div className="relative"><Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input value={q} onChange={e => setQ(e.target.value)} className={inputCls + " pl-9"} placeholder="नाम, वोटर ID या मकान नंबर से खोजें" /></div>
         </div>
         {loading ? <div className="p-8 text-center"><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></div> : <ul className="max-h-[60vh] divide-y overflow-y-auto">
-          {list.map(v => <li key={v.id}><button onClick={() => { setSelected(v.id); setVerified(false); }} className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted ${current?.id===v.id ? "bg-secondary" : ""}`}><div><div className="font-medium">{v.full_name}</div><div className="text-xs text-muted-foreground">मकान {v.house_number ?? "—"} · <span className="font-mono">{v.voter_id ?? "—"}</span></div></div>{v.attendance.length ? <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs text-success">Voted</span> : <span className="rounded-full bg-warning/25 px-2 py-0.5 text-xs">Pending</span>}</button></li>)}
+          {list.map(v => <li key={v.id}><button onClick={() => { setSelected(v.id); setVerified(false); }} className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted ${current?.id===v.id ? "bg-secondary" : ""}`}><div><div className="flex items-center gap-2"><span className="inline-flex h-7 min-w-7 items-center justify-center rounded border border-border bg-muted/50 px-1 text-xs font-semibold tabular-nums">{v.serial_no ?? "—"}</span><span className="font-medium">{v.full_name}</span></div><div className="text-xs text-muted-foreground">मकान {v.house_number ?? "—"} · <span className="font-mono">{v.voter_id ?? "—"}</span></div></div>{v.attendance.length ? <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs text-success">Voted</span> : <span className="rounded-full bg-warning/25 px-2 py-0.5 text-xs">Pending</span>}</button></li>)}
           {!list.length && <li className="p-6 text-center text-sm text-muted-foreground">इस वार्ड में कोई मतदाता नहीं मिला</li>}
         </ul>}
       </Card>

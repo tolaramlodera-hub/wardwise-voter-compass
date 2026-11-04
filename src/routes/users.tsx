@@ -1,79 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { Plus, KeyRound, X } from "lucide-react";
+import { useEffect,useMemo,useState,type FormEvent } from "react";
+import { Plus,UserX,UserCheck,LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell, Card, btnPrimary, btnOutline, inputCls } from "@/components/AppShell";
-import { users as initial, wards, type AppUser } from "@/lib/mock-data";
-
-export const Route = createFileRoute("/users")({
-  head: () => ({
-    meta: [
-      { title: "यूजर मैनेजमेंट — केवल एडमिन" },
-      { name: "description", content: "यूजर बनाएं, पासवर्ड रीसेट करें, वार्ड की जिम्मेदारी दें और एक्टिव/डिसेबल करें।" },
-      { property: "og:title", content: "यूजर मैनेजमेंट" },
-      { property: "og:description", content: "Admin-only user and ward assignment management." },
-    ],
-  }),
-  component: Users,
-});
-
-function Users() {
-  const [list, setList] = useState<AppUser[]>(initial);
-  const [open, setOpen] = useState(false);
-  const [sel, setSel] = useState<number[]>([]);
-  const toggle = (id: string) => setList((l) => l.map((u) => (u.id === id ? { ...u, active: !u.active } : u)));
-
-  return (
-    <AppShell title="यूजर मैनेजमेंट">
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">नया यूजर केवल मुख्य एडमिन बना सकते हैं।</p>
-        <button className={btnPrimary} onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> नया यूजर</button>
-      </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        {list.map((u) => (
-          <Card key={u.id} className="p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="font-semibold">{u.name} <span className="ml-1 rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">{u.role}</span></div>
-                <div className="font-mono text-xs text-muted-foreground">ID: {u.loginId}</div>
-              </div>
-              {u.role === "User" && (
-                <button onClick={() => toggle(u.id)} className={`rounded-full px-3 py-1 text-xs font-semibold ${u.active ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"}`}>{u.active ? "Active" : "Disabled"}</button>
-              )}
-            </div>
-            <div className="mt-2 text-sm">वार्ड: {u.role === "Admin" ? "सभी" : u.wards.join(", ")}</div>
-            <div className="text-xs text-muted-foreground">अंतिम लॉगिन: {u.lastLogin}</div>
-            <div className="mt-3 flex gap-2">
-              <button className={btnOutline} onClick={() => toast.success(`${u.loginId} का पासवर्ड रीसेट लिंक बनेगा (अगले चरण में)`)}><KeyRound className="h-3.5 w-3.5" /> पासवर्ड रीसेट</button>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {open && (
-        <div className="fixed inset-0 z-30 flex items-end justify-center bg-foreground/40 p-0 sm:items-center sm:p-4" onClick={() => setOpen(false)}>
-          <form onClick={(e) => e.stopPropagation()} onSubmit={(e) => {
-            e.preventDefault();
-            const f = new FormData(e.currentTarget);
-            setList((l) => [...l, { id: String(Date.now()), name: String(f.get("name")), loginId: String(f.get("login")), role: "User", wards: sel, active: true, lastLogin: "—" }]);
-            setOpen(false); setSel([]); toast.success("नया यूजर बनाया गया");
-          }} className="w-full max-w-md space-y-3 rounded-t-2xl bg-card p-5 sm:rounded-2xl">
-            <div className="flex items-center justify-between"><h2 className="text-xl font-bold">नया यूजर बनाएं</h2><button type="button" onClick={() => setOpen(false)}><X className="h-5 w-5" /></button></div>
-            <input required name="name" className={inputCls} placeholder="यूजर का नाम" />
-            <input required name="login" className={inputCls} placeholder="लॉगिन ID" />
-            <input required type="password" name="pass" className={inputCls} placeholder="पासवर्ड सेट करें" />
-            <div>
-              <div className="mb-1 text-sm font-medium">वार्ड की जिम्मेदारी</div>
-              <div className="grid grid-cols-6 gap-1.5">
-                {wards.map((w) => (
-                  <button type="button" key={w.number} onClick={() => setSel((s) => (s.includes(w.number) ? s.filter((x) => x !== w.number) : [...s, w.number]))} className={`h-9 rounded-md border text-sm ${sel.includes(w.number) ? "bg-primary text-primary-foreground" : ""}`}>{w.number}</button>
-                ))}
-              </div>
-            </div>
-            <button className={btnPrimary + " w-full"}>यूजर बनाएं</button>
-          </form>
-        </div>
-      )}
-    </AppShell>
-  );
-}
+import { AppShell,Card,btnPrimary,btnOutline,inputCls } from "@/components/AppShell";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+type Staff={user_id:string;full_name:string;role:string;is_active:boolean;ward_assignments:{wards:{ward_number:number}|null}[]};
+export const Route=createFileRoute("/users")({head:()=>({meta:[{title:"यूजर मैनेजमेंट"}]}),component:Users});
+function Users(){const supabase=useMemo(()=>getSupabaseBrowserClient(),[]);const [list,setList]=useState<Staff[]>([]);const [loading,setLoading]=useState(true);const [open,setOpen]=useState(false);const [busy,setBusy]=useState(false);const load=async()=>{setLoading(true);const {data,error}=await supabase.from("profiles").select("user_id,full_name,role,is_active,ward_assignments(wards(ward_number))").order("full_name");if(error)toast.error("यूजर सूची नहीं मिली: "+error.message);else setList((data??[]) as unknown as Staff[]);setLoading(false);};useEffect(()=>{void load();},[]);const invoke=async(body:Record<string,unknown>)=>{const {data,error}=await supabase.functions.invoke("admin-user-management",{body});if(error)throw error;if(data?.error)throw new Error(data.error);};const toggle=async(u:Staff)=>{setBusy(true);try{await invoke({action:"toggle",user_id:u.user_id,is_active:!u.is_active});toast.success("स्टाफ स्थिति अपडेट हुई");await load();}catch(e){toast.error(e instanceof Error?e.message:"अपडेट विफल");}finally{setBusy(false);}};const create=async(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();const f=new FormData(e.currentTarget);const ward_numbers=f.getAll("ward").map(Number);if(!ward_numbers.length){toast.error("कम से कम एक वार्ड चुनें");return;}setBusy(true);try{await invoke({action:"create",full_name:String(f.get("name")),email:String(f.get("email")),password:String(f.get("password")),ward_numbers});toast.success("स्टाफ अकाउंट बन गया");setOpen(false);await load();}catch(err){toast.error(err instanceof Error?err.message:"अकाउंट नहीं बना");}finally{setBusy(false);}};return <AppShell title="यूजर मैनेजमेंट"><div className="mb-4 flex items-center justify-between"><p className="text-sm text-muted-foreground">स्टाफ अकाउंट और वार्ड जिम्मेदारी</p><button className={btnPrimary} onClick={()=>setOpen(true)}><Plus className="h-4 w-4"/>नया स्टाफ</button></div>{loading?<div className="p-8 text-center"><LoaderCircle className="mx-auto animate-spin"/></div>:list.length===0?<Card className="p-8 text-center text-sm text-muted-foreground">अभी कोई स्टाफ अकाउंट नहीं है।</Card>:<div className="grid gap-3 md:grid-cols-2">{list.map(u=><Card key={u.user_id} className="p-4"><div className="flex items-center justify-between"><b>{u.full_name}</b><span className="text-xs">{u.role==="admin"?"एडमिन":u.is_active?"सक्रिय":"निष्क्रिय"}</span></div><div className="mt-2 text-xs text-muted-foreground">{u.user_id}</div><div className="my-2 text-sm">वार्ड: {u.role==="admin"?"सभी":u.ward_assignments?.map(a=>a.wards?.ward_number).filter(Boolean).join(", ")||"नहीं दिया"}</div>{u.role!=="admin"&&<button disabled={busy} className={btnOutline} onClick={()=>void toggle(u)}>{u.is_active?<><UserX className="h-4 w-4"/>निष्क्रिय करें</>:<><UserCheck className="h-4 w-4"/>सक्रिय करें</>}</button>}</Card>)}</div>}{open&&<div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-3"><form onSubmit={create} className="w-full max-w-md space-y-3 rounded-xl bg-card p-5"><h2 className="text-lg font-bold">नया स्टाफ अकाउंट</h2><input name="name" required className={inputCls} placeholder="पूरा नाम"/><input name="email" type="email" required className={inputCls} placeholder="ईमेल / लॉगिन ID"/><input name="password" type="password" minLength={8} required className={inputCls} placeholder="कम से कम 8 अक्षर का पासवर्ड"/><div className="text-sm font-medium">वार्ड आवंटित करें</div><div className="grid grid-cols-4 gap-2">{Array.from({length:7},(_,i)=><label key={i+1} className="flex items-center gap-2 rounded border p-2 text-sm"><input type="checkbox" name="ward" value={i+1}/>वार्ड {i+1}</label>)}</div><div className="flex justify-end gap-2"><button type="button" className={btnOutline} onClick={()=>setOpen(false)}>रद्द</button><button disabled={busy} className={btnPrimary}>{busy?"प्रोसेस हो रहा है":"स्टाफ बनाएं"}</button></div></form></div>}</AppShell>;}

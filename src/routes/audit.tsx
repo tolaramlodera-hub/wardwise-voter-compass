@@ -1,35 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AppShell, Card } from "@/components/AppShell";
-import { useStore } from "@/lib/mock-data";
-
-export const Route = createFileRoute("/audit")({
-  head: () => ({
-    meta: [
-      { title: "Audit Log — सभी गतिविधियाँ" },
-      { name: "description", content: "सभी यूजर की लॉगिन, एंट्री और बदलाव का सुरक्षित रिकॉर्ड।" },
-      { property: "og:title", content: "Audit Log" },
-      { property: "og:description", content: "Complete activity record of all users." },
-    ],
-  }),
-  component: Audit,
-});
-
-function Audit() {
-  const { audit } = useStore();
-  return (
-    <AppShell title="Audit Log">
-      <Card>
-        <ul className="divide-y">
-          {audit.map((a, i) => (
-            <li key={i} className="flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:gap-4">
-              <span className="w-36 shrink-0 font-mono text-xs text-muted-foreground">{a.time}</span>
-              <span className="w-20 shrink-0 text-sm font-semibold">{a.user}</span>
-              <span className="w-fit rounded-full bg-secondary px-2.5 py-0.5 text-xs text-secondary-foreground">{a.action}</span>
-              <span className="text-sm">{a.detail}</span>
-            </li>
-          ))}
-        </ul>
-      </Card>
-    </AppShell>
-  );
-}
+import { useEffect,useMemo,useState } from "react";
+import { LoaderCircle } from "lucide-react";
+import { toast } from "sonner";
+import { AppShell,Card } from "@/components/AppShell";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+type LogRow={id:string;created_at:string;action:string;entity_type:string;entity_id:string|null;details:Record<string,unknown>|null;actor_id:string|null};
+export const Route=createFileRoute("/audit")({head:()=>({meta:[{title:"Audit Log"}]}),component:Audit});
+function Audit(){const supabase=useMemo(()=>getSupabaseBrowserClient(),[]);const [rows,setRows]=useState<LogRow[]>([]);const [names,setNames]=useState<Record<string,string>>({});const [loading,setLoading]=useState(true);useEffect(()=>{let live=true;void(async()=>{const {data,error}=await supabase.from("audit_logs").select("id,created_at,action,entity_type,entity_id,details,actor_id").order("created_at",{ascending:false}).limit(300);if(error){toast.error("Audit Log लोड नहीं हुआ: "+error.message);setLoading(false);return;}const logs=(data??[]) as LogRow[];const ids=[...new Set(logs.map(x=>x.actor_id).filter((x):x is string=>!!x))];const map:Record<string,string>={};if(ids.length){const {data:profiles}=await supabase.from("profiles").select("user_id,full_name").in("user_id",ids);for(const p of profiles??[])map[p.user_id]=p.full_name;}if(live){setRows(logs);setNames(map);setLoading(false);}})();return()=>{live=false;};},[supabase]);return <AppShell title="Audit Log"><Card><div className="border-b p-4 text-sm text-muted-foreground">हाल की अधिकतम 300 गतिविधियाँ</div>{loading?<div className="p-8 text-center"><LoaderCircle className="mx-auto animate-spin"/></div>:rows.length===0?<div className="p-8 text-center text-sm text-muted-foreground">अभी कोई गतिविधि दर्ज नहीं है।</div>:<ul className="divide-y">{rows.map(r=><li key={r.id} className="flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:gap-4"><span className="w-40 shrink-0 font-mono text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString("hi-IN")}</span><span className="w-36 shrink-0 text-sm font-semibold">{r.actor_id?names[r.actor_id]??"यूजर":"सिस्टम"}</span><span className="w-fit rounded-full bg-secondary px-2.5 py-0.5 text-xs">{r.action}</span><span className="text-sm">{r.entity_type}{r.entity_id?" · "+r.entity_id:""}</span><span className="text-xs text-muted-foreground">{r.details?JSON.stringify(r.details):""}</span></li>)}</ul>}</Card></AppShell>;}

@@ -21,11 +21,21 @@ function Reports() {
  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
  const [rows,setRows] = useState<{number:number;total:number;voted:number;pending:number;pct:number}[]>([]);
  useEffect(() => { let active=true; const load=async()=> {
-  const [{data:voters,error:ve},{data:wards,error:we}]=await Promise.all([supabase.from("voters").select("id,ward_id,attendance(id)"),supabase.from("wards").select("id,ward_number").eq("is_active",true).lte("ward_number",7).order("ward_number")]);
-  if(ve||we){toast.error("रिपोर्ट लोड नहीं हुई");return;}
-  const hasAttendance=(attendance:unknown)=>Array.isArray(attendance)?attendance.length>0:Boolean(attendance);
-  const result=(wards??[]).map(w=>{const own=(voters??[]).filter(v=>v.ward_id===w.id);const voted=own.filter(v=>hasAttendance(v.attendance)).length;return {number:w.ward_number,total:own.length,voted,pending:own.length-voted,pct:own.length?Math.round(voted/own.length*1000)/10:0};});
-  if(active)setRows(result);
+  const {data:wards,error:we}=await supabase.from("wards").select("id,ward_number").eq("is_active",true).lte("ward_number",7).order("ward_number");
+  if(we){toast.error("रिपोर्ट वार्ड डेटा लोड नहीं हुआ");return;}
+  try {
+   // Exact server-side counts avoid downloading the full voter table and the 1,000-row API cap.
+   const result=await Promise.all((wards??[]).map(async w=>{
+    const [{count:total,error:te},{count:voted,error:ve}]=await Promise.all([
+     supabase.from("voters").select("id",{count:"exact",head:true}).eq("ward_id",w.id),
+     supabase.from("attendance").select("voter_id, voters!inner(ward_id)",{count:"exact",head:true}).eq("voters.ward_id",w.id),
+    ]);
+    if(te||ve) throw te??ve;
+    const all=total??0,done=voted??0;
+    return {number:w.ward_number,total:all,voted:done,pending:all-done,pct:all?Math.round(done/all*1000)/10:0};
+   }));
+   if(active)setRows(result);
+  } catch(error) { console.error("Ward report aggregate count failed:",error); toast.error("रिपोर्ट की गिनती लोड नहीं हुई"); }
  };void load();return()=>{active=false;};},[supabase]);
  const all=rows.reduce((a,w)=>({total:a.total+w.total,voted:a.voted+w.voted,pending:a.pending+w.pending}),{total:0,voted:0,pending:0});
  const pct=all.total?Math.round(all.voted/all.total*1000)/10:0;

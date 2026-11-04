@@ -31,16 +31,28 @@ function Dashboard() {
         .from("profiles").select("is_active").eq("user_id", user.id).maybeSingle();
       if (profileError || !profile?.is_active) return;
 
-      const [{ data: voters, error: voterError }, { data: wardRows, error: wardError }] = await Promise.all([
-        supabase.from("voters").select("id,ward_id,attendance(id)"),
-        supabase.from("wards").select("id,ward_number,name").eq("is_active", true).lte("ward_number", 7).order("ward_number")
-      ]);
-      if (voterError || wardError) { toast.error("डैशबोर्ड डेटा लोड नहीं हुआ"); return; }
-      const list = wardRows ?? [];
-      const hasAttendance = (attendance: unknown) => Array.isArray(attendance) ? attendance.length > 0 : Boolean(attendance);
-      const wardStats = list.map(w => { const own = (voters ?? []).filter(v => v.ward_id === w.id); const voted = own.filter(v => hasAttendance(v.attendance)).length; return { number:w.ward_number,total:own.length,voted,pending:own.length-voted,pct:own.length?Math.round(voted/own.length*1000)/10:0 }; });
-      const total = (voters ?? []).length, voted = (voters ?? []).filter(v => hasAttendance(v.attendance)).length;
-      if (active) setStats({ total, voted, pending:total-voted, wards:wardStats });
+      const { data: wardRows, error: wardError } = await supabase
+        .from("wards").select("id,ward_number,name").eq("is_active", true).lte("ward_number", 7).order("ward_number");
+      if (wardError) { toast.error("डैशबोर्ड वार्ड डेटा लोड नहीं हुआ"); return; }
+      // Count in PostgreSQL instead of downloading every voter and attendance row.
+      try {
+        const wardStats = await Promise.all((wardRows ?? []).map(async (w) => {
+          const [{ count: total, error: totalError }, { count: voted, error: votedError }] = await Promise.all([
+            supabase.from("voters").select("id", { count: "exact", head: true }).eq("ward_id", w.id),
+            supabase.from("attendance").select("voter_id, voters!inner(ward_id)", { count: "exact", head: true }).eq("voters.ward_id", w.id),
+          ]);
+          if (totalError || votedError) throw totalError ?? votedError;
+          const all = total ?? 0;
+          const done = voted ?? 0;
+          return { number: w.ward_number, total: all, voted: done, pending: all - done, pct: all ? Math.round(done / all * 1000) / 10 : 0 };
+        }));
+        const total = wardStats.reduce((sum, w) => sum + w.total, 0);
+        const voted = wardStats.reduce((sum, w) => sum + w.voted, 0);
+        if (active) setStats({ total, voted, pending: total - voted, wards: wardStats });
+      } catch (error) {
+        console.error("Dashboard aggregate count failed:", error);
+        toast.error("डैशबोर्ड डेटा लोड नहीं हुआ");
+      }
     };
     void load();
     const refreshOnReturn = () => { if (document.visibilityState === "visible") void load(); };

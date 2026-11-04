@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { Search, Upload, FileSpreadsheet, Plus, Pencil, X, Save, LoaderCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Search, Upload, FileSpreadsheet, Pencil, X, Save, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, Card, WardSelect, inputCls, btnOutline, btnPrimary } from "@/components/AppShell";
 import { VoterTable } from "@/components/VoterTable";
@@ -46,23 +46,40 @@ function Voters() {
   const [voters, setVoters] = useState<Voter[]>([]);
   const [ward, setWard] = useState(0);
   const [q, setQ] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [totalRows, setTotalRows] = useState(0);
+  const pageSize = 100;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
   const [editing, setEditing] = useState<EditForm | null>(null);
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
 
-  const loadVoters = async () => {
+  const loadVoters = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from("voters")
-      .select("id,voter_id,serial_no,full_name,relative_name,age,gender,house_number,wards!inner(ward_number)")
+      .select("id,voter_id,serial_no,full_name,relative_name,age,gender,house_number,wards!inner(ward_number)", { count: "exact" })
       .order("serial_no", { ascending: true, nullsFirst: false });
+    if (ward) query = query.eq("wards.ward_number", ward);
+    const term = search.trim().replace(/[,.%()]/g, " ").replace(/\s+/g, " ").slice(0, 80);
+    if (term) {
+      const clauses = [
+        "full_name.ilike.%" + term + "%",
+        "voter_id.ilike.%" + term + "%",
+        "house_number.ilike.%" + term + "%",
+      ];
+      if (/^\d+$/.test(term)) clauses.push("serial_no.eq." + Number(term));
+      query = query.or(clauses.join(","));
+    }
+    const { data, count, error } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
     if (error) {
       toast.error("मतदाता सूची लोड नहीं हुई: " + error.message);
       setLoading(false);
       return;
     }
+    setTotalRows(count ?? 0);
     const rows = (data ?? []) as unknown as VoterRow[];
     setVoters(rows.map((v) => ({
       id: v.id,
@@ -76,7 +93,7 @@ function Voters() {
       ward: v.wards?.ward_number ?? 0,
     })));
     setLoading(false);
-  };
+  }, [supabase, ward, search, page]);
 
   useEffect(() => {
     let active = true;
@@ -87,16 +104,19 @@ function Voters() {
       if (!user) return;
       const { data: profile } = await supabase.from("profiles").select("role,is_active").eq("user_id", user.id).maybeSingle();
       if (active) setCanEdit(profile?.role === "admin" && profile.is_active === true);
-      if (active) await loadVoters();
     };
-    void init().catch((error) => toast.error(error instanceof Error ? error.message : "डेटा लोड नहीं हुआ"));
+    void init().catch((error) => toast.error(error instanceof Error ? error.message : "यूजर जाँच नहीं हुई"));
     return () => { active = false; };
   }, [supabase]);
 
-  const list = voters.filter((v) =>
-    (!ward || v.ward === ward) &&
-    (!q || v.name.includes(q) || v.voterId.toLowerCase().includes(q.toLowerCase()) || v.house.includes(q) || String(v.serialNo ?? "").includes(q))
-  );
+  useEffect(() => {
+    const timer = window.setTimeout(() => { setSearch(q); setPage(0); }, 250);
+    return () => window.clearTimeout(timer);
+  }, [q]);
+
+  useEffect(() => { void loadVoters(); }, [loadVoters]);
+
+  const list = voters;
 
   const openEdit = (v: Voter) => setEditing({
     id: v.id, voterId: v.voterId, serialNo: String(v.serialNo ?? ""),
@@ -151,15 +171,20 @@ function Voters() {
 
       <Card>
         <div className="flex flex-wrap gap-2 border-b p-4">
-          <WardSelect value={ward} onChange={setWard} />
+          <WardSelect value={ward} onChange={(value) => { setWard(value); setPage(0); }} />
           <div className="relative min-w-48 flex-1">
             <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} className={inputCls + " pl-9"} placeholder="क्रमांक, नाम, वोटर ID या मकान नंबर" />
+            <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} className={inputCls + " pl-9"} placeholder="क्रमांक, नाम, वोटर ID या मकान नंबर" />
           </div>
         </div>
-        <div className="px-4 py-2 text-xs text-muted-foreground">{loading ? "सूची लोड हो रही है..." : `${list.length} मतदाता`}</div>
+        <div className="px-4 py-2 text-xs text-muted-foreground">{loading ? "सूची लोड हो रही है..." : `कुल ${totalRows} मतदाता · ${Math.min(totalRows, page * pageSize + 1)}–${Math.min(totalRows, (page + 1) * pageSize)} दिख रहे हैं`}</div>
         {loading ? <div className="p-8 text-center"><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></div> :
           <VoterTable voters={list} action={canEdit ? (v) => <button type="button" className={btnOutline} onClick={() => openEdit(v)}><Pencil className="h-4 w-4" /> एडिट</button> : undefined} />}
+        <div className="flex items-center justify-between border-t p-3">
+          <button type="button" className={btnOutline} disabled={loading || page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>← पिछला</button>
+          <span className="text-sm text-muted-foreground">पेज {page + 1} / {Math.max(1, Math.ceil(totalRows / pageSize))}</span>
+          <button type="button" className={btnOutline} disabled={loading || (page + 1) * pageSize >= totalRows} onClick={() => setPage((p) => p + 1)}>अगला →</button>
+        </div>
       </Card>
 
       {editing && (

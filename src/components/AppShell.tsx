@@ -90,7 +90,6 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
           <div className="flex items-center gap-2"><ShieldCheck className="h-6 w-6 text-primary md:hidden" /><h1 className="text-xl font-bold md:text-2xl">{title}</h1></div>
           <div className="flex items-center gap-2 text-sm"><span className="hidden rounded-full bg-secondary px-3 py-1 text-secondary-foreground sm:inline">{identity.role === "admin" ? "एडमिन" : "स्टाफ"}</span><button type="button" onClick={logout} className="md:hidden"><LogOut className="h-5 w-5 text-muted-foreground" /></button></div>
         </header>
-        <div className="bg-warning/20 px-4 py-1.5 text-center text-xs text-warning-foreground md:px-8">डिज़ाइन प्रीव्यू — अधिकृत मतदाता सूची अपलोड होने तक मतदाता डेटा खाली रहेगा। केवल मतदान उपस्थिति दर्ज होगी; किसे वोट दिया इसकी जानकारी नहीं रखी जाएगी।</div>
         <main className="flex-1 p-4 md:p-8">{children}</main>
       </div>
       <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t bg-card md:hidden">

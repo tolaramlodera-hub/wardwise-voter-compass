@@ -37,6 +37,10 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
         if (active) await navigate({ to: "/login", replace: true });
         return;
       }
+      if (profile.role === "staff" && ["/wards", "/users", "/audit"].includes(pathname)) {
+        if (active) await navigate({ to: "/", replace: true });
+        return;
+      }
       if (active) {
         setIdentity({ name: profile.full_name || user.email || "यूजर", role: profile.role });
         setChecking(false);
@@ -47,7 +51,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
       if (!session && active) void navigate({ to: "/login", replace: true });
     });
     return () => { active = false; subscription.unsubscribe(); };
-  }, [navigate]);
+  }, [navigate, pathname]);
 
   const logout = async () => {
     await getSupabaseBrowserClient().auth.signOut();

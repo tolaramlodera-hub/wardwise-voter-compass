@@ -80,6 +80,8 @@ function Voters() {
 
   useEffect(() => {
     let active = true;
+    const requestedWard = Number(new URLSearchParams(window.location.search).get("ward"));
+    if (Number.isInteger(requestedWard) && requestedWard >= 1 && requestedWard <= 7) setWard(requestedWard);
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;

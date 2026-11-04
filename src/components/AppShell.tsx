@@ -51,7 +51,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
             <h1 className="text-xl font-bold md:text-2xl">{title}</h1>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <span className="hidden rounded-full bg-secondary px-3 py-1 text-secondary-foreground sm:inline">Admin · सभी वार्ड</span>
+            <span className="hidden rounded-full bg-secondary px-3 py-1 text-secondary-foreground sm:inline">डिज़ाइन प्रीव्यू</span>
             <Link to="/login" className="md:hidden"><LogOut className="h-5 w-5 text-muted-foreground" /></Link>
           </div>
         </header>

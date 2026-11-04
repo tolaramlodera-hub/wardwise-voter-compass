@@ -37,7 +37,7 @@ function Reports() {
    ...rows.map(w => ["वार्ड " + w.number, w.total, w.voted, w.pending, w.pct + "%"]),
    ["कुल", all.total, all.voted, all.pending, pct + "%"],
   ];
-  const csv = "\\uFEFF" + lines.map(line => line.map(csvCell).join(",")).join("\\r\\n");
+  const csv = String.fromCharCode(0xFEFF) + lines.map(line => line.map(csvCell).join(",")).join(String.fromCharCode(13, 10));
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

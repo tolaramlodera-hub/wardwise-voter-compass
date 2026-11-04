@@ -94,11 +94,23 @@ export function VoterCsvImport({ wardNumber, onComplete }: Props) {
       const { data: ward, error: wardError } = await supabase.from("wards").select("id").eq("ward_number", wardNumber).single();
       if (wardError || !ward) throw new Error("वार्ड " + wardNumber + " नहीं मिला।");
       const records = raw.map(({ record }) => ({ ...record, ward_id: ward.id }));
+      const voterIds = records.map((record) => record.voter_id).filter((id): id is string => Boolean(id));
+      const { data: existingIds, error: idsError } = voterIds.length
+        ? await supabase.from("voters").select("voter_id").in("voter_id", voterIds)
+        : { data: [], error: null };
+      if (idsError) throw new Error("मौजूदा वोटर ID जाँची नहीं जा सकीं: " + idsError.message);
+      const { data: existingSerials, error: serialError } = await supabase.from("voters").select("serial_no").eq("ward_id", ward.id);
+      if (serialError) throw new Error("वार्ड की मौजूदा क्रम संख्या जाँची नहीं जा सकीं: " + serialError.message);
+      const knownIds = new Set((existingIds ?? []).map((item) => item.voter_id));
+      const knownSerials = new Set((existingSerials ?? []).map((item) => item.serial_no).filter((n): n is number => n !== null));
+      const fresh = records.filter((record) =>
+        (!record.voter_id || !knownIds.has(record.voter_id)) && !knownSerials.has(record.serial_no)
+      );
       let inserted = 0;
-      for (let i = 0; i < records.length; i += 100) {
-        const batch = records.slice(i, i + 100);
-        const { data, error } = await supabase.from("voters").upsert(batch, { onConflict: "voter_id", ignoreDuplicates: true }).select("id");
-        if (error) throw new Error("अपलोड पंक्ति " + (i + 1) + "–" + Math.min(i + 100, records.length) + " पर रुका: " + error.message);
+      for (let i = 0; i < fresh.length; i += 100) {
+        const batch = fresh.slice(i, i + 100);
+        const { data, error } = await supabase.from("voters").insert(batch).select("id");
+        if (error) throw new Error("अपलोड पंक्ति " + (i + 1) + "–" + Math.min(i + 100, fresh.length) + " पर रुका: " + error.message);
         inserted += data?.length ?? 0;
       }
       const skipped = records.length - inserted;

@@ -23,7 +23,7 @@ export function VoterTable({ voters, showVote, action }: { voters: Voter[]; show
                 <td className="px-4 py-2.5">{v.age}</td>
                 <td className="px-4 py-2.5">{v.gender}</td>
                 <td className="px-4 py-2.5">{v.house}</td>
-                <td className="px-4 py-2.5 font-mono text-xs">{v.voterId}</td>
+                <td className="px-4 py-2.5 font-mono text-xs">{v.voterId || "—"}</td>
                 <td className="px-4 py-2.5">{v.ward}</td>
                 {showVote && <><td className="px-4 py-2.5">{v.votedBy}</td><td className="px-4 py-2.5 text-xs">{v.votedAt}</td></>}
                 {action && <td className="px-4 py-2.5 text-right">{action(v)}</td>}
@@ -38,7 +38,7 @@ export function VoterTable({ voters, showVote, action }: { voters: Voter[]; show
             <div className="min-w-0">
               <div className="font-semibold">{v.name}</div>
               <div className="text-xs text-muted-foreground">पिता/पति: {v.relative} · {v.age} वर्ष · {v.gender}</div>
-              <div className="text-xs text-muted-foreground">मकान {v.house} · वार्ड {v.ward} · <span className="font-mono">{v.voterId}</span></div>
+              <div className="text-xs text-muted-foreground">मकान {v.house} · वार्ड {v.ward} · <span className="font-mono">{v.voterId || "—"}</span></div>
               {showVote && <div className="mt-1 text-xs text-success">✓ {v.votedBy} · {v.votedAt}</div>}
             </div>
             {action && <div className="shrink-0">{action(v)}</div>}

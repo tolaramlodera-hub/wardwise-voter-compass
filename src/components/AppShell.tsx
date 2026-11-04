@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { LayoutDashboard, Map, Users, Vote, CheckCircle2, Clock, BarChart3, UserCog, ScrollText, LogOut, ShieldCheck, LoaderCircle, Trash2 } from "lucide-react";
+import { LayoutDashboard, Map, Users, Vote, CheckCircle2, Clock, BarChart3, UserCog, ScrollText, LogOut, ShieldCheck, LoaderCircle, Trash2, ListChecks } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const nav = [
@@ -9,6 +9,7 @@ const nav = [
   { to: "/voters", label: "मतदाता सूची", icon: Users },
   { to: "/voted", label: "Voted सूची", icon: CheckCircle2 },
   { to: "/pending", label: "Pending सूची", icon: Clock },
+  { to: "/ward-status", label: "वार्डवार वोट स्थिति", icon: ListChecks },
   { to: "/reports", label: "वार्ड रिपोर्ट", icon: BarChart3 },
   { to: "/wards", label: "वार्ड मैनेजमेंट", icon: Map, adminOnly: true },
   { to: "/data-admin", label: "डेटा प्रबंधन", icon: Trash2, adminOnly: true },
@@ -64,7 +65,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   }
 
   const visibleNav = nav.filter((item) => !("adminOnly" in item && item.adminOnly) || identity.role === "admin");
-  const mobileNav = visibleNav.filter((item) => ["/", "/entry", "/voters", "/reports", "/users"].includes(item.to)).slice(0, 5);
+  const mobileNav = visibleNav.filter((item) => ["/", "/entry", "/voters", "/ward-status", "/users", "/reports"].includes(item.to)).slice(0, 6);
 
   return (
     <div className="min-h-screen md:flex">
@@ -92,7 +93,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
         </header>
         <main className="flex-1 p-4 md:p-8">{children}</main>
       </div>
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t bg-card md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t bg-card md:hidden">
         {mobileNav.map((n) => {
           const active = pathname === n.to;
           return <Link key={n.to} to={n.to} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] ${active ? "text-primary font-semibold" : "text-muted-foreground"}`}><n.icon className="h-5 w-5" /> {n.label.split(" ")[0]}</Link>;

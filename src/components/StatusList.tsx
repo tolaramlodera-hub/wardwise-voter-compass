@@ -21,10 +21,10 @@ type Row = {
 
 const PAGE_SIZE = 50;
 
-export function StatusList({ voted }: { voted: boolean }) {
+export function StatusList({ voted, initialWard = 0, showWardSelect = true }: { voted: boolean; initialWard?: number; showWardSelect?: boolean }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [rows, setRows] = useState<Row[]>([]);
-  const [ward, setWard] = useState(0);
+  const [ward, setWard] = useState(initialWard);
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -149,7 +149,7 @@ export function StatusList({ voted }: { voted: boolean }) {
     </div>
     <Card>
       <div className="flex flex-wrap gap-2 border-b p-4">
-        <WardSelect value={ward} onChange={(value) => { setWard(value); setPage(0); }} />
+        {showWardSelect && <WardSelect value={ward} onChange={(value) => { setWard(value); setPage(0); }} />}
         <div className="relative min-w-48 flex-1"><Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input value={q} onChange={e => setQ(e.target.value)} className={inputCls + " pl-9"} placeholder="नाम या वोटर ID से खोजें" /></div>
       </div>
       {loading ? <div className="p-8 text-center"><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></div> : <>

@@ -36,10 +36,7 @@ export function StatusList({ voted }: { voted: boolean }) {
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setSearch(q.trim());
-      setPage(0);
-    }, 250);
+    const timer = window.setTimeout(() => { setSearch(q.trim()); setPage(0); }, 250);
     return () => window.clearTimeout(timer);
   }, [q]);
 
@@ -54,7 +51,6 @@ export function StatusList({ voted }: { voted: boolean }) {
           if (active) { setRows([]); setIsAdmin(false); setTotal(0); }
           return;
         }
-
         const { data: profile, error: profileError } = await supabase
           .from("profiles").select("is_active,role").eq("user_id", user.id).maybeSingle();
         if (profileError) throw profileError;
@@ -64,17 +60,24 @@ export function StatusList({ voted }: { voted: boolean }) {
         }
         if (active) setIsAdmin(String(profile.role ?? "").toLowerCase() === "admin");
 
+        let wardId: string | null = null;
+        if (ward) {
+          const { data: wardRow, error } = await supabase.from("wards").select("id").eq("ward_number", ward).maybeSingle();
+          if (error) throw error;
+          wardId = wardRow?.id ?? null;
+        }
+
         const countFor = async (hasVote: boolean) => {
           let query = supabase.from("voters")
-            .select(hasVote ? "id,attendance!inner(voter_id)" : "id", { count: "exact", head: true });
-          if (ward) query = query.eq("ward_id", (await supabase.from("wards").select("id").eq("ward_number", ward).maybeSingle()).data?.id ?? "");
+            .select(hasVote ? "id,attendance!inner(voter_id)" : "id,attendance(voter_id)", { count: "exact", head: true });
+          if (wardId) query = query.eq("ward_id", wardId);
           if (!hasVote) query = query.is("attendance", null);
           const { count, error } = await query;
           if (error) throw error;
           return count ?? 0;
         };
-
         const [votedTotal, pendingTotal] = await Promise.all([countFor(true), countFor(false)]);
+
         let query = supabase.from("voters")
           .select(voted
             ? "id,serial_no,full_name,relative_name,age,gender,house_number,voter_id,wards!inner(ward_number),attendance!inner(recorded_at,recorded_by)"
@@ -99,8 +102,7 @@ export function StatusList({ voted }: { voted: boolean }) {
         if (active) {
           setRows([]);
           const message = error && typeof error === "object" && "message" in error
-            ? String(error.message)
-            : error instanceof Error ? error.message : "कृपया दोबारा प्रयास करें";
+            ? String(error.message) : error instanceof Error ? error.message : "कृपया दोबारा प्रयास करें";
           toast.error("सूची लोड नहीं हुई: " + message);
         }
       } finally {
@@ -117,19 +119,11 @@ export function StatusList({ voted }: { voted: boolean }) {
     try {
       const { error } = await supabase.from("attendance").delete().eq("voter_id", voter.id);
       if (error) throw error;
-      toast.success("वोट एंट्री वापस हटा दी गई। मतदाता Pending सूची में आ गया है।");
-      setPage(0);
-      setSearch((value) => value);
-      // Refresh the current list and summary after the attendance change.
-      const { data, error: reloadError, count } = await supabase.from("voters")
-        .select("id,serial_no,full_name,relative_name,age,gender,house_number,voter_id,wards!inner(ward_number),attendance!inner(recorded_at,recorded_by)", { count: "exact" })
-        .eq("id", voter.id).limit(1);
-      if (reloadError) throw reloadError;
       setRows((current) => current.filter((row) => row.id !== voter.id));
       setTotal((value) => Math.max(0, value - 1));
       setVotedCount((value) => Math.max(0, value - 1));
       setPendingCount((value) => value + 1);
-      void data; void count;
+      toast.success("वोट एंट्री वापस हटा दी गई। मतदाता Pending सूची में आ गया है।");
     } catch (error) {
       toast.error("वोट वापस नहीं हट सका: " + (error instanceof Error ? error.message : "कृपया दोबारा प्रयास करें"));
     } finally {
@@ -140,17 +134,10 @@ export function StatusList({ voted }: { voted: boolean }) {
   const voters = rows.map((v) => {
     const latestAttendance = Array.isArray(v.attendance) ? v.attendance[0] : undefined;
     return {
-      id: v.id,
-      serialNo: v.serial_no ?? undefined,
-      name: v.full_name,
-      relative: v.relative_name ?? "",
-      age: v.age ?? 0,
-      gender: v.gender ?? "अन्य",
-      house: v.house_number ?? "",
-      voterId: v.voter_id ?? "",
-      ward: v.wards?.ward_number ?? 0,
-      votedAt: latestAttendance?.recorded_at,
-      votedBy: latestAttendance?.recorded_by,
+      id: v.id, serialNo: v.serial_no ?? undefined, name: v.full_name,
+      relative: v.relative_name ?? "", age: v.age ?? 0, gender: v.gender ?? "अन्य",
+      house: v.house_number ?? "", voterId: v.voter_id ?? "", ward: v.wards?.ward_number ?? 0,
+      votedAt: latestAttendance?.recorded_at, votedBy: latestAttendance?.recorded_by,
     } as Voter;
   });
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));

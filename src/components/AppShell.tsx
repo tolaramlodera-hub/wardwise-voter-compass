@@ -38,7 +38,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
         if (active) await navigate({ to: "/login", replace: true });
         return;
       }
-      if (profile.role === "staff" && ["/wards", "/users", "/audit"].includes(pathname)) {
+      if (profile.role === "staff" && ["/wards", "/data-admin", "/users", "/audit"].includes(pathname)) {
         if (active) await navigate({ to: "/", replace: true });
         return;
       }

@@ -17,6 +17,7 @@ function Entry() {
   const [rows, setRows] = useState<VoterRow[]>([]);
   const [ward, setWard] = useState(1);
   const [q, setQ] = useState("");
+  const [serialQuery, setSerialQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [verified, setVerified] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -46,7 +47,11 @@ function Entry() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const list = rows.filter(v => !q || (v.full_name ?? "").toLowerCase().includes(q.toLowerCase()) || (v.voter_id ?? "").toLowerCase().includes(q.toLowerCase()) || (v.house_number ?? "").toLowerCase().includes(q.toLowerCase()));
+  const serialSearchActive = serialQuery.trim().length > 0;
+  const serialNumber = /^\\d+$/.test(serialQuery.trim()) ? Number(serialQuery.trim()) : null;
+  const list = serialSearchActive
+    ? (serialNumber === null ? [] : rows.filter(v => v.serial_no === serialNumber))
+    : rows.filter(v => !q || (v.full_name ?? "").toLowerCase().includes(q.toLowerCase()) || (v.voter_id ?? "").toLowerCase().includes(q.toLowerCase()) || (v.house_number ?? "").toLowerCase().includes(q.toLowerCase()));
   const voted = rows.filter(v => (v.attendance ?? []).length > 0).length;
   const current = selected ? rows.find(v => v.id === selected) ?? null : null;
 
@@ -96,8 +101,8 @@ function Entry() {
       </Card>
       <Card>
         <div className="space-y-3 border-b p-4">
-          <div className="space-y-2"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-semibold">वार्ड चुनें</span><span className="text-xs text-muted-foreground">वोटेड <b className="text-success">{voted}</b> · बाकी <b className="text-warning-foreground">{rows.length-voted}</b></span></div><div className="grid grid-cols-7 gap-2">{Array.from({ length: 7 }, (_, i) => i + 1).map(n => <button key={n} type="button" aria-pressed={ward === n} onClick={() => { setWard(n); setSelected(null); setVerified(false); setQ(""); }} className={`h-10 min-w-0 whitespace-nowrap rounded-lg border px-0 text-[9px] font-semibold transition-colors sm:px-1 sm:text-xs ${ward === n ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}>वार्ड {n}</button>)}</div></div>
-          <div className="relative"><Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input value={q} onChange={e => setQ(e.target.value)} className={inputCls + " pl-9"} placeholder="नाम, वोटर ID या मकान नंबर से खोजें" /></div>
+          <div className="space-y-2"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-semibold">वार्ड चुनें</span><span className="text-xs text-muted-foreground">वोटेड <b className="text-success">{voted}</b> · बाकी <b className="text-warning-foreground">{rows.length-voted}</b></span></div><div className="grid grid-cols-7 gap-2">{Array.from({ length: 7 }, (_, i) => i + 1).map(n => <button key={n} type="button" aria-pressed={ward === n} onClick={() => { setWard(n); setSelected(null); setVerified(false); setQ(""); setSerialQuery(""); }} className={`h-10 min-w-0 whitespace-nowrap rounded-lg border px-0 text-[9px] font-semibold transition-colors sm:px-1 sm:text-xs ${ward === n ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}>वार्ड {n}</button>)}</div></div>
+          <div className="space-y-2"><div className="relative"><Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input value={q} onChange={e => { setQ(e.target.value); setSerialQuery(""); }} className={inputCls + " pl-9"} placeholder="नाम, वोटर ID या मकान नंबर से खोजें" /></div><div className="relative"><Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input inputMode="numeric" pattern="[0-9]*" value={serialQuery} onChange={e => { setSerialQuery(e.target.value.replace(/[^0-9]/g, "")); setQ(""); }} className={inputCls + " pl-9"} placeholder="केवल सीरियल नंबर से खोजें" /></div></div>
         </div>
         {loading ? <div className="p-8 text-center"><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></div> : <ul className="max-h-[60vh] divide-y overflow-y-auto">
           {list.map(v => <li key={v.id}><button onClick={() => { setSelected(v.id); setVerified(false); }} className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted ${current?.id===v.id ? "bg-secondary" : ""}`}><div><div className="flex items-center gap-2"><span className="inline-flex h-7 min-w-7 items-center justify-center rounded border border-border bg-muted/50 px-1 text-xs font-semibold tabular-nums">{v.serial_no ?? "—"}</span><span className="font-medium">{v.full_name}</span></div><div className="text-xs text-muted-foreground">मकान {v.house_number ?? "—"} · <span className="font-mono">{v.voter_id ?? "—"}</span></div></div>{v.attendance.length ? <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs text-success">Voted</span> : <span className="rounded-full bg-warning/25 px-2 py-0.5 text-xs">Pending</span>}</button></li>)}

@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, CheckCircle2, ShieldAlert, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell, Card, WardSelect, inputCls, btnPrimary } from "@/components/AppShell";
+import { AppShell, Card, inputCls, btnPrimary } from "@/components/AppShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type VoterRow = { id: string; serial_no: number | null; full_name: string; relative_name: string | null; age: number | null; gender: string | null; house_number: string | null; voter_id: string | null; wards: { ward_number: number } | null; attendance: { recorded_at: string; recorded_by: string }[] };
@@ -96,7 +96,7 @@ function Entry() {
       </Card>
       <Card>
         <div className="space-y-3 border-b p-4">
-          <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-semibold">वार्ड चुनें</span><WardSelect value={ward} onChange={n => { setWard(n); setSelected(null); setVerified(false); }} allLabel={null} /><span className="ml-auto text-xs text-muted-foreground">वोटेड <b className="text-success">{voted}</b> · बाकी <b className="text-warning-foreground">{rows.length-voted}</b></span></div>
+          <div className="space-y-2"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-semibold">वार्ड चुनें</span><span className="text-xs text-muted-foreground">वोटेड <b className="text-success">{voted}</b> · बाकी <b className="text-warning-foreground">{rows.length-voted}</b></span></div><div className="grid grid-cols-4 gap-2 sm:grid-cols-7">{Array.from({ length: 7 }, (_, i) => i + 1).map(n => <button key={n} type="button" aria-pressed={ward === n} onClick={() => { setWard(n); setSelected(null); setVerified(false); setQ(""); }} className={`h-10 rounded-lg border px-2 text-sm font-semibold transition-colors ${ward === n ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}>वार्ड {n}</button>)}</div></div>
           <div className="relative"><Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input value={q} onChange={e => setQ(e.target.value)} className={inputCls + " pl-9"} placeholder="नाम, वोटर ID या मकान नंबर से खोजें" /></div>
         </div>
         {loading ? <div className="p-8 text-center"><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></div> : <ul className="max-h-[60vh] divide-y overflow-y-auto">

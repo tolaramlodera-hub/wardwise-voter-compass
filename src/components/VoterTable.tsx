@@ -3,6 +3,8 @@ import type { Voter } from "@/lib/mock-data";
 
 export function VoterTable({ voters, showVote, action }: { voters: Voter[]; showVote?: boolean | undefined; action?: ((v: Voter) => ReactNode) | undefined }) {
   if (!voters.length) return <div className="p-8 text-center text-sm text-muted-foreground">कोई मतदाता नहीं मिला</div>;
+  const orderedVoters = [...voters].sort((a, b) => a.ward - b.ward || (a.serialNo ?? Number.MAX_SAFE_INTEGER) - (b.serialNo ?? Number.MAX_SAFE_INTEGER));
+  const serialBadge = (serialNo: number | undefined) => <span className="inline-flex h-7 min-w-7 items-center justify-center rounded border border-border bg-muted/50 px-1 text-xs font-semibold tabular-nums">{serialNo ?? "—"}</span>;
   return (
     <>
       <div className="hidden overflow-x-auto md:block">
@@ -15,9 +17,9 @@ export function VoterTable({ voters, showVote, action }: { voters: Voter[]; show
             </tr>
           </thead>
           <tbody>
-            {voters.map((v) => (
+            {orderedVoters.map((v) => (
               <tr key={v.id} className="border-t hover:bg-muted/50">
-                <td className="px-4 py-2.5 tabular-nums">{v.serialNo ?? "—"}</td>
+                <td className="px-4 py-2.5">{serialBadge(v.serialNo)}</td>
                 <td className="px-4 py-2.5 font-medium">{v.name}</td>
                 <td className="px-4 py-2.5">{v.relative}</td>
                 <td className="px-4 py-2.5">{v.age}</td>
@@ -36,7 +38,7 @@ export function VoterTable({ voters, showVote, action }: { voters: Voter[]; show
         {voters.map((v) => (
           <li key={v.id} className="flex items-start justify-between gap-3 p-4">
             <div className="min-w-0">
-              <div className="font-semibold">{v.name}</div>
+              <div className="flex items-center gap-2"><span className="shrink-0">{serialBadge(v.serialNo)}</span><span className="font-semibold">{v.name}</span></div>
               <div className="text-xs text-muted-foreground">पिता/पति: {v.relative} · {v.age} वर्ष · {v.gender}</div>
               <div className="text-xs text-muted-foreground">मकान {v.house} · वार्ड {v.ward} · <span className="font-mono">{v.voterId || "—"}</span></div>
               {showVote && <div className="mt-1 text-xs text-success">✓ {v.votedBy} · {v.votedAt}</div>}

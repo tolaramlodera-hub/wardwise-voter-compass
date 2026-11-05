@@ -21,7 +21,27 @@ function WardWiseStatus() {
     <AppShell title="वार्डवार वोट स्थिति">
       <Card className="mb-5 p-4">
         <div className="mb-2 text-sm font-semibold">वार्ड चुनें</div>
-        <WardSelect value={ward} onChange={setWard} />
+        <div className="grid grid-cols-7 gap-2" role="group" aria-label="वार्ड चुनें">
+          {Array.from({ length: 7 }, (_, index) => index + 1).map((number) => (
+            <button
+              key={number}
+              type="button"
+              aria-pressed={ward === number}
+              onClick={() => setWard(number)}
+              className={`flex h-11 min-w-0 items-center justify-center rounded-lg border text-sm font-semibold transition-colors ${
+                ward === number
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : "border-border bg-background text-foreground hover:bg-secondary"
+              }`}
+            >
+              {number}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">{ward === 0 ? "अभी सभी वार्ड दिख रहे हैं" : `चयनित: वार्ड ${ward}`}</span>
+          {ward !== 0 && <button type="button" className="text-xs font-medium text-primary underline underline-offset-4" onClick={() => setWard(0)}>सभी वार्ड</button>}
+        </div>
         <p className="mt-2 text-xs text-muted-foreground">
           {ward === 0 ? "सभी सक्रिय वार्डों की अलग-अलग Voted और Pending सूचियाँ नीचे दिखाई जाएँगी।" : `वार्ड ${ward} की दोनों सूचियाँ नीचे अलग-अलग दिखाई जाएँगी।`}
         </p>

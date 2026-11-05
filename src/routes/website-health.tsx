@@ -11,8 +11,8 @@ const initial: Health = {
   website: { state: "pending", detail: "जाँच बाकी" }, database: { state: "pending", detail: "जाँच बाकी" },
   auth: { state: "pending", detail: "जाँच बाकी" }, github: { state: "pending", detail: "जाँच बाकी" },
   vercel: { state: "pending", detail: "जाँच बाकी" }, errors: { state: "unavailable", detail: "स्थायी Error रिपोर्ट के लिए Error tracking जोड़ना बाकी है" },
-  storage: { state: "unavailable", detail: "Storage usage के लिए सुरक्षित project metrics access चाहिए" },
-  loginAudit: { state: "unavailable", detail: "Login history के लिए Auth audit-log access जोड़ना बाकी है" },
+  storage: { state: "pending", detail: "Storage buckets की जाँच बाकी" },
+  loginAudit: { state: "unavailable", detail: "Supabase Auth audit logs platform Logs में उपलब्ध हैं; ऐप से सुरक्षित API कनेक्शन अभी नहीं जोड़ा गया है" },
 };
 const stateLabel = { ok: "सही", error: "समस्या", pending: "जाँच जारी", unavailable: "सेटअप बाकी" };
 const stateClass = { ok: "bg-emerald-100 text-emerald-800", error: "bg-red-100 text-red-800", pending: "bg-amber-100 text-amber-800", unavailable: "bg-muted text-muted-foreground" };
@@ -63,7 +63,7 @@ function WebsiteHealth() {
       else next.vercel = { state: "ok", detail: `Vercel API कनेक्शन सही · पिछले 24 घंटे में ${data?.deployments?.length ?? 0} Build रिकॉर्ड मिले` };
     } catch (error) { next.vercel = { state: "error", detail: error instanceof Error ? error.message : "Vercel API जाँच विफल" }; }
 
-    setHealth(next);
+    try {\n      const storageStart = performance.now();\n      const { data: buckets, error: storageError } = await supabase.storage.listBuckets();\n      next.storage = storageError\n        ? { state: "unavailable", detail: `Storage bucket सूची नहीं पढ़ी जा सकी: ${storageError.message}` }\n        : { state: "ok", detail: buckets?.length ? `${buckets.length} Storage bucket उपलब्ध: ${buckets.map((bucket) => bucket.name).join(", ")} · फ़ाइलों का कुल आकार project metrics से अलग जाँचना होगा` : "अभी कोई Storage bucket configured नहीं है", duration: Math.round(performance.now() - storageStart) };\n    } catch (error) { next.storage = { state: "unavailable", detail: error instanceof Error ? error.message : "Storage जाँच विफल" }; }\n\n    setHealth(next);
     setCheckedAt(new Date());
     setLoading(false);
     const failures = [next.website, next.database, next.auth, next.vercel].filter((item) => item.state === "error").length;
@@ -79,17 +79,17 @@ function WebsiteHealth() {
     { key: "vercel", title: "Vercel Build API", icon: Activity, desc: "Build Manager API connection" },
     { key: "errors", title: "Error Monitoring", icon: AlertTriangle, desc: "स्थायी browser/server error tracking" },
     { key: "storage", title: "Storage Monitoring", icon: HardDrive, desc: "फाइल storage usage और limits" },
-    { key: "loginAudit", title: "Login Activity", icon: Clock3, desc: "Login history और failed login audit" },
+    { key: "loginAudit", title: "Login Activity Audit", icon: Clock3, desc: "Supabase Auth के सफल/असफल login events" },
   ] as const;
   const good = [health.website, health.database, health.auth, health.github, health.vercel].filter((x) => x.state === "ok").length;
   const bad = [health.website, health.database, health.auth, health.github, health.vercel].filter((x) => x.state === "error").length;
   return <AppShell title="Website Health">
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">वेबसाइट, Database, Login, GitHub और Vercel की एक जगह से जाँच</p><p className="mt-1 text-xs text-muted-foreground">यह पेज केवल read-only जाँच करता है; कोई डेटा, यूजर, Build या Production सेटिंग नहीं बदलता।</p></div><button onClick={() => void runChecks()} disabled={loading} className={btnOutline}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> अभी जाँचें</button></div>
-    <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3"><StatCard label="सही जाँच" value={good} icon={CheckCircle2} tone="success" /><StatCard label="समस्या" value={bad} icon={XCircle} tone="warning" /><StatCard label="अतिरिक्त सेटअप" value="3" icon={AlertTriangle} tone="accent" /></div>
+    <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3"><StatCard label="सही जाँच" value={good} icon={CheckCircle2} tone="success" /><StatCard label="समस्या" value={bad} icon={XCircle} tone="warning" /><StatCard label="अतिरिक्त सेटअप" value={[health.errors, health.loginAudit].filter((x) => x.state === "unavailable").length} icon={AlertTriangle} tone="accent" /></div>
     <div className="grid gap-3 md:grid-cols-2">
       {cards.map((card) => { const item = health[card.key as keyof Health]; const Icon = card.icon; return <Card key={card.key} className="p-4"><div className="flex items-start gap-3"><div className="rounded-lg bg-muted p-2"><Icon className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">{card.title}</h2><span className={`rounded-full px-2 py-1 text-xs font-semibold ${stateClass[item.state]}`}>{stateLabel[item.state]}</span></div><p className="mt-1 text-xs text-muted-foreground">{card.desc}</p><p className="mt-2 break-words text-sm">{item.detail}</p>{item.duration !== undefined && <p className="mt-1 text-xs text-muted-foreground">Response: {item.duration} ms</p>}</div></div></Card>; })}
     </div>
-    <Card className="mt-5 p-4"><h2 className="font-semibold">अतिरिक्त मॉनिटरिंग सक्षम करने के लिए</h2><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground"><li>Error Monitoring के लिए Sentry जैसे error-tracking service का सुरक्षित integration चाहिए।</li><li>Storage usage और Login audit के लिए Supabase project-level metrics/log access चाहिए; इसे public browser में expose नहीं किया जाएगा।</li><li>GitHub API की unauthenticated rate limit हो सकती है; जरूरत पड़ने पर सीमित read-only GitHub credential को server-side secret में रखा जाएगा।</li></ul><div className="mt-3 flex flex-wrap gap-2"><a href="https://github.com/tolaramlodera-hub/wardwise-voter-compass/pull/32" target="_blank" rel="noreferrer" className={btnOutline}>GitHub PR खोलें <ExternalLink className="h-3.5 w-3.5" /></a><a href="https://supabase.com/dashboard/project/litdtkqtserftjlkkatg" target="_blank" rel="noreferrer" className={btnOutline}>Supabase Dashboard <ExternalLink className="h-3.5 w-3.5" /></a></div></Card>
+    <Card className="mt-5 p-4"><h2 className="font-semibold">अतिरिक्त मॉनिटरिंग सक्षम करने के लिए</h2><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground"><li>Error Monitoring के लिए अभी Vercel Runtime Logs उपलब्ध हैं; स्थायी alerts और error history के लिए Sentry DSN या Vercel Log Drain चाहिए।</li><li>Storage bucket सूची की जाँच अब यहीं होती है; कुल bytes/usage के लिए project-level metrics permission चाहिए।</li><li>Login Activity के लिए Supabase Auth audit logs उपलब्ध हैं, लेकिन उन्हें ऐप में सुरक्षित रूप से दिखाने हेतु server-side Logs API integration बाकी है।</li></ul><div className="mt-3 flex flex-wrap gap-2"><a href="https://vercel.com/tola-ram1/wardwise-voter-compass/logs" target="_blank" rel="noreferrer" className={btnOutline}>Vercel Runtime Logs <ExternalLink className="h-3.5 w-3.5" /></a><a href="https://supabase.com/dashboard/project/litdtkqtserftjlkkatg/logs/explorer" target="_blank" rel="noreferrer" className={btnOutline}>Supabase Auth Logs <ExternalLink className="h-3.5 w-3.5" /></a><a href="https://github.com/tolaramlodera-hub/wardwise-voter-compass/pull/32" target="_blank" rel="noreferrer" className={btnOutline}>GitHub PR खोलें <ExternalLink className="h-3.5 w-3.5" /></a></div></Card>
     <p className="mt-3 text-xs text-muted-foreground">{checkedAt ? `अंतिम जाँच: ${checkedAt.toLocaleString("hi-IN")}` : "जाँच की प्रतीक्षा में"} · डेटा रिफ्रेश करने के लिए “अभी जाँचें” दबाएँ।</p>
   </AppShell>;
 }

@@ -10,7 +10,7 @@ type Health = { website: Check; database: Check; auth: Check; github: Check; ver
 const initial: Health = {
   website: { state: "pending", detail: "जाँच बाकी" }, database: { state: "pending", detail: "जाँच बाकी" },
   auth: { state: "pending", detail: "जाँच बाकी" }, github: { state: "pending", detail: "जाँच बाकी" },
-  vercel: { state: "pending", detail: "जाँच बाकी" }, errors: { state: "unavailable", detail: "स्थायी Error रिपोर्ट के लिए Error tracking जोड़ना बाकी है" },
+  vercel: { state: "pending", detail: "जाँच बाकी" }, errors: { state: "pending", detail: "इस पेज के ब्राउज़र errors की निगरानी शुरू हो रही है" },
   storage: { state: "pending", detail: "Storage buckets की जाँच बाकी" },
   loginAudit: { state: "unavailable", detail: "Supabase Auth audit logs platform Logs में उपलब्ध हैं; ऐप से सुरक्षित API कनेक्शन अभी नहीं जोड़ा गया है" },
 };
@@ -22,6 +22,7 @@ function WebsiteHealth() {
   const [health, setHealth] = useState<Health>(initial);
   const [loading, setLoading] = useState(false);
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
+  const [browserErrorCount, setBrowserErrorCount] = useState(0);
   const runChecks = useCallback(async () => {
     setLoading(true);
     const next: Health = { ...initial };
@@ -79,13 +80,37 @@ function WebsiteHealth() {
   }, []);
 
   useEffect(() => { void runChecks(); }, [runChecks]);
+
+  // Session-only client error capture; no error payloads are persisted.
+  useEffect(() => {
+    const recordError = (message: string) => {
+      const safeMessage = message.slice(0, 180);
+      setBrowserErrorCount((count) => {
+        const nextCount = count + 1;
+        setHealth((previous) => ({ ...previous, errors: { state: "error", detail: nextCount + " browser errors मिले। नवीनतम: " + safeMessage } }));
+        return nextCount;
+      });
+    };
+    const onError = (event: ErrorEvent) => recordError(event.message || "अज्ञात browser error");
+    const onRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      recordError(reason instanceof Error ? reason.message : String(reason || "Unhandled promise rejection"));
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    setHealth((previous) => ({ ...previous, errors: { state: "ok", detail: "Browser error monitoring सक्रिय है · इस पेज के खुले रहने तक errors पकड़े जाएँगे" } }));
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
+  }, []);
   const cards = [
     { key: "website", title: "वेबसाइट स्थिति", icon: Globe, desc: "वर्तमान वेबसाइट का HTTP response" },
     { key: "database", title: "Supabase Database", icon: Database, desc: "लॉगिन यूजर की सुरक्षित profile query" },
     { key: "auth", title: "Login / Auth", icon: ShieldCheck, desc: "Admin session और authentication" },
     { key: "github", title: "GitHub PR / Checks", icon: Github, desc: "PR #32 और उपलब्ध commit checks" },
     { key: "vercel", title: "Vercel Build API", icon: Activity, desc: "Build Manager API connection" },
-    { key: "errors", title: "Error Monitoring", icon: AlertTriangle, desc: "स्थायी browser/server error tracking" },
+    { key: "errors", title: "Error Monitoring", icon: AlertTriangle, desc: "इस admin session के browser runtime errors" },
     { key: "storage", title: "Storage Monitoring", icon: HardDrive, desc: "फाइल storage usage और limits" },
     { key: "loginAudit", title: "Login Activity Audit", icon: Clock3, desc: "Supabase Auth के सफल/असफल login events" },
   ] as const;
@@ -97,7 +122,7 @@ function WebsiteHealth() {
     <div className="grid gap-3 md:grid-cols-2">
       {cards.map((card) => { const item = health[card.key as keyof Health]; const Icon = card.icon; return <Card key={card.key} className="p-4"><div className="flex items-start gap-3"><div className="rounded-lg bg-muted p-2"><Icon className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">{card.title}</h2><span className={`rounded-full px-2 py-1 text-xs font-semibold ${stateClass[item.state]}`}>{stateLabel[item.state]}</span></div><p className="mt-1 text-xs text-muted-foreground">{card.desc}</p><p className="mt-2 break-words text-sm">{item.detail}</p>{item.duration !== undefined && <p className="mt-1 text-xs text-muted-foreground">Response: {item.duration} ms</p>}</div></div></Card>; })}
     </div>
-    <Card className="mt-5 p-4"><h2 className="font-semibold">अतिरिक्त मॉनिटरिंग सक्षम करने के लिए</h2><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground"><li>Error Monitoring के लिए अभी Vercel Runtime Logs उपलब्ध हैं; स्थायी alerts और error history के लिए Sentry DSN या Vercel Log Drain चाहिए।</li><li>Storage bucket सूची की जाँच अब यहीं होती है; कुल bytes/usage के लिए project-level metrics permission चाहिए।</li><li>Login Activity के लिए Supabase Auth audit logs उपलब्ध हैं, लेकिन उन्हें ऐप में सुरक्षित रूप से दिखाने हेतु server-side Logs API integration बाकी है।</li></ul><div className="mt-3 flex flex-wrap gap-2"><a href="https://vercel.com/tola-ram1/wardwise-voter-compass/logs" target="_blank" rel="noreferrer" className={btnOutline}>Vercel Runtime Logs <ExternalLink className="h-3.5 w-3.5" /></a><a href="https://supabase.com/dashboard/project/litdtkqtserftjlkkatg/logs/explorer" target="_blank" rel="noreferrer" className={btnOutline}>Supabase Auth Logs <ExternalLink className="h-3.5 w-3.5" /></a><a href="https://github.com/tolaramlodera-hub/wardwise-voter-compass/pull/32" target="_blank" rel="noreferrer" className={btnOutline}>GitHub PR खोलें <ExternalLink className="h-3.5 w-3.5" /></a></div></Card>
+    <Card className="mt-5 p-4"><h2 className="font-semibold">अतिरिक्त मॉनिटरिंग सक्षम करने के लिए</h2><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground"><li>Browser error monitoring इस Health पेज के खुले रहने तक सक्रिय रहती है; स्थायी browser/server error history और alerts के लिए Sentry DSN या Vercel Log Drain चाहिए। अभी पकड़े गए browser errors: {browserErrorCount} (refresh पर reset होंगे)।</li><li>Storage bucket सूची की जाँच अब यहीं होती है; कुल bytes/usage के लिए project-level metrics permission चाहिए।</li><li>Login Activity के लिए Supabase Auth audit logs उपलब्ध हैं, लेकिन उन्हें ऐप में सुरक्षित रूप से दिखाने हेतु server-side Logs API integration बाकी है।</li></ul><div className="mt-3 flex flex-wrap gap-2"><a href="https://vercel.com/tola-ram1/wardwise-voter-compass/logs" target="_blank" rel="noreferrer" className={btnOutline}>Vercel Runtime Logs <ExternalLink className="h-3.5 w-3.5" /></a><a href="https://supabase.com/dashboard/project/litdtkqtserftjlkkatg/logs/explorer" target="_blank" rel="noreferrer" className={btnOutline}>Supabase Auth Logs <ExternalLink className="h-3.5 w-3.5" /></a><a href="https://github.com/tolaramlodera-hub/wardwise-voter-compass/pull/32" target="_blank" rel="noreferrer" className={btnOutline}>GitHub PR खोलें <ExternalLink className="h-3.5 w-3.5" /></a></div></Card>
     <p className="mt-3 text-xs text-muted-foreground">{checkedAt ? `अंतिम जाँच: ${checkedAt.toLocaleString("hi-IN")}` : "जाँच की प्रतीक्षा में"} · डेटा रिफ्रेश करने के लिए “अभी जाँचें” दबाएँ।</p>
   </AppShell>;
 }

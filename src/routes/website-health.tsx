@@ -72,7 +72,7 @@ function WebsiteHealth() {
         : { state: "ok", detail: buckets?.length ? `${buckets.length} Storage bucket उपलब्ध: ${buckets.map((bucket) => bucket.name).join(", ")} · फ़ाइलों का कुल आकार project metrics से अलग जाँचना होगा` : "अभी कोई Storage bucket configured नहीं है", duration: Math.round(performance.now() - storageStart) };
     } catch (error) { next.storage = { state: "unavailable", detail: error instanceof Error ? error.message : "Storage जाँच विफल" }; }
 
-    setHealth(next);
+    setHealth((previous) => ({ ...next, errors: previous.errors }));
     setCheckedAt(new Date());
     setLoading(false);
     const failures = [next.website, next.database, next.auth, next.vercel].filter((item) => item.state === "error").length;

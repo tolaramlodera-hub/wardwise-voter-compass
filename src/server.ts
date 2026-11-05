@@ -50,6 +50,7 @@ async function normalizeCatastrophicSsrResponse(response: Response, request: Req
     tags: { source: "ssr", route: new URL(request.url).pathname },
     extra: { method: request.method, status: response.status },
   });
+  await Sentry.flush(2000);
   console.error(error);
   return new Response(renderErrorPage(), {
     status: 500,
@@ -77,6 +78,7 @@ export default {
         tags: { source: "server", route: new URL(request.url).pathname },
         extra: { method: request.method },
       });
+      await Sentry.flush(2000);
       console.error(error);
       return new Response(renderErrorPage(), {
         status: 500,

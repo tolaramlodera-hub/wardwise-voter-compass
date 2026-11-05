@@ -69,7 +69,7 @@ function WebsiteHealth() {
       const { data: buckets, error: storageError } = await supabase.storage.listBuckets();
       next.storage = storageError
         ? { state: "unavailable", detail: `Storage bucket सूची नहीं पढ़ी जा सकी: ${storageError.message}` }
-        : { state: "ok", detail: buckets?.length ? `${buckets.length} Storage bucket उपलब्ध: ${buckets.map((bucket) => bucket.name).join(", ")} · फ़ाइलों का कुल आकार project metrics से अलग जाँचना होगा` : "अभी कोई Storage bucket configured नहीं है", duration: Math.round(performance.now() - storageStart) };
+        : buckets?.length ? { state: "ok", detail: `${buckets.length} Storage bucket उपलब्ध: ${buckets.map((bucket) => bucket.name).join(", ")} · फ़ाइलों का कुल आकार project metrics से अलग जाँचना होगा`, duration: Math.round(performance.now() - storageStart) } : { state: "unavailable", detail: "अभी कोई Storage bucket configured नहीं है", duration: Math.round(performance.now() - storageStart) };
     } catch (error) { next.storage = { state: "unavailable", detail: error instanceof Error ? error.message : "Storage जाँच विफल" }; }
 
     setHealth((previous) => ({ ...next, errors: previous.errors }));
@@ -118,7 +118,7 @@ function WebsiteHealth() {
   const bad = [health.website, health.database, health.auth, health.github, health.vercel].filter((x) => x.state === "error").length;
   return <AppShell title="Website Health">
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">वेबसाइट, Database, Login, GitHub और Vercel की एक जगह से जाँच</p><p className="mt-1 text-xs text-muted-foreground">यह पेज केवल read-only जाँच करता है; कोई डेटा, यूजर, Build या Production सेटिंग नहीं बदलता।</p></div><button onClick={() => void runChecks()} disabled={loading} className={btnOutline}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> अभी जाँचें</button></div>
-    <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3"><StatCard label="सही जाँच" value={good} icon={CheckCircle2} tone="success" /><StatCard label="समस्या" value={bad} icon={XCircle} tone="warning" /><StatCard label="अतिरिक्त सेटअप" value={[health.errors, health.loginAudit].filter((x) => x.state === "unavailable").length} icon={AlertTriangle} tone="accent" /></div>
+    <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3"><StatCard label="सही जाँच" value={good} icon={CheckCircle2} tone="success" /><StatCard label="समस्या" value={bad} icon={XCircle} tone="warning" /><StatCard label="अतिरिक्त सेटअप" value={[health.storage, health.loginAudit].filter((x) => x.state === "unavailable").length} icon={AlertTriangle} tone="accent" /></div>
     <div className="grid gap-3 md:grid-cols-2">
       {cards.map((card) => { const item = health[card.key as keyof Health]; const Icon = card.icon; return <Card key={card.key} className="p-4"><div className="flex items-start gap-3"><div className="rounded-lg bg-muted p-2"><Icon className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">{card.title}</h2><span className={`rounded-full px-2 py-1 text-xs font-semibold ${stateClass[item.state]}`}>{stateLabel[item.state]}</span></div><p className="mt-1 text-xs text-muted-foreground">{card.desc}</p><p className="mt-2 break-words text-sm">{item.detail}</p>{item.duration !== undefined && <p className="mt-1 text-xs text-muted-foreground">Response: {item.duration} ms</p>}</div></div></Card>; })}
     </div>

@@ -1,12 +1,12 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { LayoutDashboard, Map, Users, Vote, CheckCircle2, Clock, BarChart3, UserCog, ScrollText, LogOut, ShieldCheck, LoaderCircle, Trash2, ListChecks, Hammer } from "lucide-react";
+import { LayoutDashboard, Map, Users, Vote, CheckCircle2, Clock, BarChart3, UserCog, ScrollText, LogOut, ShieldCheck, LoaderCircle, Trash2, ListChecks, Hammer, Activity } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 const nav = [
   { to: "/", label: "डैशबोर्ड", icon: LayoutDashboard }, { to: "/entry", label: "वोटिंग एंट्री", icon: Vote },
   { to: "/voters", label: "मतदाता सूची", icon: Users }, { to: "/voted", label: "Voted सूची", icon: CheckCircle2 },
   { to: "/pending", label: "Pending सूची", icon: Clock }, { to: "/ward-status", label: "वार्डवार वोट स्थिति", icon: ListChecks },
-  { to: "/reports", label: "वार्ड रिपोर्ट", icon: BarChart3 }, { to: "/build-manager", label: "Build Manager", icon: Hammer, adminOnly: true },
+  { to: "/reports", label: "वार्ड रिपोर्ट", icon: BarChart3 }, { to: "/build-manager", label: "Build Manager", icon: Hammer, adminOnly: true }, { to: "/website-health", label: "Website Health", icon: Activity, adminOnly: true },
   { to: "/wards", label: "वार्ड मैनेजमेंट", icon: Map, adminOnly: true }, { to: "/data-admin", label: "डेटा प्रबंधन", icon: Trash2, adminOnly: true },
   { to: "/users", label: "यूजर मैनेजमेंट", icon: UserCog, adminOnly: true }, { to: "/audit", label: "Audit Log", icon: ScrollText, adminOnly: true },
 ] as const;
@@ -20,7 +20,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
       if (!user) { if (active) await navigate({ to: "/login", replace: true }); return; }
       const { data: profile, error } = await supabase.from("profiles").select("full_name,role,is_active").eq("user_id", user.id).maybeSingle();
       if (error || !profile?.is_active || (profile.role !== "admin" && profile.role !== "staff")) { await supabase.auth.signOut(); if (active) await navigate({ to: "/login", replace: true }); return; }
-      if (profile.role === "staff" && ["/wards", "/data-admin", "/users", "/audit", "/build-manager"].includes(pathname)) { if (active) await navigate({ to: "/", replace: true }); return; }
+      if (profile.role === "staff" && ["/wards", "/data-admin", "/users", "/audit", "/build-manager", "/website-health"].includes(pathname)) { if (active) await navigate({ to: "/", replace: true }); return; }
       if (active) { setIdentity({ name: profile.full_name || user.email || "यूजर", role: profile.role }); setChecking(false); }
     };
     void verify().catch(() => { if (active) void navigate({ to: "/login", replace: true }); });
@@ -30,7 +30,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   const logout = async () => { await getSupabaseBrowserClient().auth.signOut(); await navigate({ to: "/login", replace: true }); };
   if (checking || !identity) return <div className="flex min-h-screen items-center justify-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="h-5 w-5 animate-spin" /> सुरक्षित लॉगिन जाँचा जा रहा है...</div>;
   const visibleNav = nav.filter((item) => !("adminOnly" in item && item.adminOnly) || identity.role === "admin");
-  const mobileNav = visibleNav.filter((item) => ["/", "/entry", "/voters", "/ward-status", "/reports", "/build-manager"].includes(item.to)).slice(0, 6);
+  const mobileNav = visibleNav.filter((item) => ["/", "/entry", "/voters", "/ward-status", "/reports", "/build-manager", "/website-health"].includes(item.to)).slice(0, 7);
   return <div className="min-h-screen md:flex">
     <aside className="hidden w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex">
       <div className="flex items-center gap-2 border-b border-sidebar-border px-5 py-5"><ShieldCheck className="h-7 w-7 text-accent" /><div><div className="font-display text-lg font-bold leading-tight">मतदाता प्रबंधन</div><div className="text-xs opacity-70">Ward Wise Voter System</div></div></div>
@@ -38,7 +38,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
       <div className="border-t border-sidebar-border p-4 text-sm"><div className="font-semibold">{identity.name}</div><div className="text-xs opacity-70">{identity.role === "admin" ? "एडमिन" : "स्टाफ"}</div><button type="button" onClick={logout} className="mt-2 flex items-center gap-2 opacity-80 hover:opacity-100"><LogOut className="h-4 w-4" /> लॉगआउट</button></div>
     </aside>
     <div className="flex min-w-0 flex-1 flex-col pb-20 md:pb-0"><header className="sticky top-0 z-10 flex items-center justify-between border-b bg-card/90 px-4 py-3 backdrop-blur md:px-8"><div className="flex items-center gap-2"><ShieldCheck className="h-6 w-6 text-primary md:hidden" /><h1 className="text-xl font-bold md:text-2xl">{title}</h1></div><div className="flex items-center gap-2 text-sm"><span className="hidden rounded-full bg-secondary px-3 py-1 text-secondary-foreground sm:inline">{identity.role === "admin" ? "एडमिन" : "स्टाफ"}</span><button type="button" onClick={logout} className="md:hidden"><LogOut className="h-5 w-5 text-muted-foreground" /></button></div></header><main className="flex-1 p-4 md:p-8">{children}</main></div>
-    <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t bg-card md:hidden">{mobileNav.map((n) => { const active = pathname === n.to; return <Link key={n.to} to={n.to} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] ${active ? "text-primary font-semibold" : "text-muted-foreground"}`}><n.icon className="h-5 w-5" /> {n.label.split(" ")[0]}</Link>; })}</nav>
+    <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-7 border-t bg-card md:hidden">{mobileNav.map((n) => { const active = pathname === n.to; return <Link key={n.to} to={n.to} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] ${active ? "text-primary font-semibold" : "text-muted-foreground"}`}><n.icon className="h-5 w-5" /> {n.label.split(" ")[0]}</Link>; })}</nav>
   </div>;
 }
 export function StatCard({ label, value, icon: Icon, tone = "primary", sub }: { label: string; value: string | number; icon: React.ComponentType<{ className?: string }>; tone?: "primary" | "success" | "warning" | "accent"; sub?: string }) {

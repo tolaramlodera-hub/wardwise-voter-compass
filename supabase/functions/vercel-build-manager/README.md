@@ -1,0 +1,1 @@
+Set Supabase Edge Function secret VERCEL_API_TOKEN. Use a least-privilege Vercel token that can read deployments for wardwise-voter-compass. Never expose the token in VITE_ variables or client code. The function verifies the caller's Supabase session and active admin profile before querying Vercel.

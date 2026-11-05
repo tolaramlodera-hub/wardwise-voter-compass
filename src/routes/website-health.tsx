@@ -1,0 +1,95 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useCallback, useEffect, useState } from "react";
+import { Activity, AlertTriangle, CheckCircle2, Clock3, Database, ExternalLink, Github, Globe, HardDrive, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
+import { toast } from "sonner";
+import { AppShell, Card, StatCard, btnOutline } from "@/components/AppShell";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+type Check = { state: "ok" | "error" | "pending" | "unavailable"; detail: string; duration?: number };
+type Health = { website: Check; database: Check; auth: Check; github: Check; vercel: Check; errors: Check; storage: Check; loginAudit: Check };
+const initial: Health = {
+  website: { state: "pending", detail: "जाँच बाकी" }, database: { state: "pending", detail: "जाँच बाकी" },
+  auth: { state: "pending", detail: "जाँच बाकी" }, github: { state: "pending", detail: "जाँच बाकी" },
+  vercel: { state: "pending", detail: "जाँच बाकी" }, errors: { state: "unavailable", detail: "स्थायी Error रिपोर्ट के लिए Error tracking जोड़ना बाकी है" },
+  storage: { state: "unavailable", detail: "Storage usage के लिए सुरक्षित project metrics access चाहिए" },
+  loginAudit: { state: "unavailable", detail: "Login history के लिए Auth audit-log access जोड़ना बाकी है" },
+};
+const stateLabel = { ok: "सही", error: "समस्या", pending: "जाँच जारी", unavailable: "सेटअप बाकी" };
+const stateClass = { ok: "bg-emerald-100 text-emerald-800", error: "bg-red-100 text-red-800", pending: "bg-amber-100 text-amber-800", unavailable: "bg-muted text-muted-foreground" };
+export const Route = createFileRoute("/website-health")({ head: () => ({ meta: [{ title: "Website Health — वार्ड वार मतदाता प्रबंधन" }] }), component: WebsiteHealth });
+
+function WebsiteHealth() {
+  const [health, setHealth] = useState<Health>(initial);
+  const [loading, setLoading] = useState(false);
+  const [checkedAt, setCheckedAt] = useState<Date | null>(null);
+  const runChecks = useCallback(async () => {
+    setLoading(true);
+    const next: Health = { ...initial };
+    const started = performance.now();
+    try {
+      const response = await fetch("/", { method: "GET", cache: "no-store", credentials: "same-origin" });
+      next.website = { state: response.ok ? "ok" : "error", detail: response.ok ? `वेबसाइट HTTP ${response.status} पर जवाब दे रही है` : `वेबसाइट ने HTTP ${response.status} लौटाया`, duration: Math.round(performance.now() - started) };
+    } catch (error) { next.website = { state: "error", detail: error instanceof Error ? error.message : "वेबसाइट तक पहुँचना संभव नहीं" }; }
+
+    const supabase = getSupabaseBrowserClient();
+    try {
+      const authStart = performance.now();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      next.auth = authError || !user ? { state: "error", detail: authError?.message || "लॉगिन सत्र उपलब्ध नहीं" } : { state: "ok", detail: "Admin login और Supabase Auth सही काम कर रहे हैं", duration: Math.round(performance.now() - authStart) };
+      if (user) {
+        const dbStart = performance.now();
+        const { data, error } = await supabase.from("profiles").select("user_id").eq("user_id", user.id).maybeSingle();
+        next.database = error ? { state: "error", detail: error.message } : data ? { state: "ok", detail: "Database से सुरक्षित profile query सफल", duration: Math.round(performance.now() - dbStart) } : { state: "error", detail: "लॉगिन यूजर की profile नहीं मिली" };
+      } else next.database = { state: "error", detail: "Database query के लिए Admin login आवश्यक है" };
+    } catch (error) { next.auth = { state: "error", detail: error instanceof Error ? error.message : "Auth जाँच विफल" }; next.database = { state: "error", detail: "Database जाँच विफल" }; }
+
+    try {
+      const gh = await fetch("https://api.github.com/repos/tolaramlodera-hub/wardwise-voter-compass/pulls/32", { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" });
+      if (gh.ok) {
+        const pr = await gh.json() as { state?: string; merged_at?: string | null; head?: { sha?: string } };
+        let detail = `PR #32: ${pr.state === "open" ? "खुला है" : pr.state || "स्थिति उपलब्ध नहीं"}`;
+        if (pr.merged_at) detail += " · Merge हो चुका है";
+        if (pr.head?.sha) {
+          const checks = await fetch(`https://api.github.com/repos/tolaramlodera-hub/wardwise-voter-compass/commits/${pr.head.sha}/status`, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" });
+          if (checks.ok) { const status = await checks.json() as { state?: string; total_count?: number }; detail += ` · Checks: ${status.state || "pending"} (${status.total_count ?? 0})`; }
+        }
+        next.github = { state: "ok", detail };
+      } else next.github = { state: "unavailable", detail: gh.status === 403 ? "GitHub API की अस्थायी rate limit; बाद में पुनः जाँचें" : `GitHub API HTTP ${gh.status}` };
+    } catch { next.github = { state: "unavailable", detail: "GitHub API से संपर्क नहीं हो पाया" }; }
+
+    try {
+      const { data, error } = await supabase.functions.invoke("vercel-build-manager", { body: { range: "24h" } });
+      if (error || data?.error || data?.configured === false) next.vercel = { state: "error", detail: data?.error || error?.message || "Vercel Token सेटअप जाँचें" };
+      else next.vercel = { state: "ok", detail: `Vercel API कनेक्शन सही · पिछले 24 घंटे में ${data?.deployments?.length ?? 0} Build रिकॉर्ड मिले` };
+    } catch (error) { next.vercel = { state: "error", detail: error instanceof Error ? error.message : "Vercel API जाँच विफल" }; }
+
+    setHealth(next);
+    setCheckedAt(new Date());
+    setLoading(false);
+    const failures = [next.website, next.database, next.auth, next.vercel].filter((item) => item.state === "error").length;
+    if (failures) toast.error(`${failures} जाँच में समस्या मिली`); else toast.success("उपलब्ध Health Checks पूरी हुईं");
+  }, []);
+
+  useEffect(() => { void runChecks(); }, [runChecks]);
+  const cards = [
+    { key: "website", title: "वेबसाइट स्थिति", icon: Globe, desc: "वर्तमान वेबसाइट का HTTP response" },
+    { key: "database", title: "Supabase Database", icon: Database, desc: "लॉगिन यूजर की सुरक्षित profile query" },
+    { key: "auth", title: "Login / Auth", icon: ShieldCheck, desc: "Admin session और authentication" },
+    { key: "github", title: "GitHub PR / Checks", icon: Github, desc: "PR #32 और उपलब्ध commit checks" },
+    { key: "vercel", title: "Vercel Build API", icon: Activity, desc: "Build Manager API connection" },
+    { key: "errors", title: "Error Monitoring", icon: AlertTriangle, desc: "स्थायी browser/server error tracking" },
+    { key: "storage", title: "Storage Monitoring", icon: HardDrive, desc: "फाइल storage usage और limits" },
+    { key: "loginAudit", title: "Login Activity", icon: Clock3, desc: "Login history और failed login audit" },
+  ] as const;
+  const good = [health.website, health.database, health.auth, health.github, health.vercel].filter((x) => x.state === "ok").length;
+  const bad = [health.website, health.database, health.auth, health.github, health.vercel].filter((x) => x.state === "error").length;
+  return <AppShell title="Website Health">
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">वेबसाइट, Database, Login, GitHub और Vercel की एक जगह से जाँच</p><p className="mt-1 text-xs text-muted-foreground">यह पेज केवल read-only जाँच करता है; कोई डेटा, यूजर, Build या Production सेटिंग नहीं बदलता।</p></div><button onClick={() => void runChecks()} disabled={loading} className={btnOutline}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> अभी जाँचें</button></div>
+    <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3"><StatCard label="सही जाँच" value={good} icon={CheckCircle2} tone="success" /><StatCard label="समस्या" value={bad} icon={XCircle} tone="warning" /><StatCard label="अतिरिक्त सेटअप" value="3" icon={AlertTriangle} tone="accent" /></div>
+    <div className="grid gap-3 md:grid-cols-2">
+      {cards.map((card) => { const item = health[card.key as keyof Health]; const Icon = card.icon; return <Card key={card.key} className="p-4"><div className="flex items-start gap-3"><div className="rounded-lg bg-muted p-2"><Icon className="h-5 w-5" /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">{card.title}</h2><span className={`rounded-full px-2 py-1 text-xs font-semibold ${stateClass[item.state]}`}>{stateLabel[item.state]}</span></div><p className="mt-1 text-xs text-muted-foreground">{card.desc}</p><p className="mt-2 break-words text-sm">{item.detail}</p>{item.duration !== undefined && <p className="mt-1 text-xs text-muted-foreground">Response: {item.duration} ms</p>}</div></div></Card>; })}
+    </div>
+    <Card className="mt-5 p-4"><h2 className="font-semibold">अतिरिक्त मॉनिटरिंग सक्षम करने के लिए</h2><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground"><li>Error Monitoring के लिए Sentry जैसे error-tracking service का सुरक्षित integration चाहिए।</li><li>Storage usage और Login audit के लिए Supabase project-level metrics/log access चाहिए; इसे public browser में expose नहीं किया जाएगा।</li><li>GitHub API की unauthenticated rate limit हो सकती है; जरूरत पड़ने पर सीमित read-only GitHub credential को server-side secret में रखा जाएगा।</li></ul><div className="mt-3 flex flex-wrap gap-2"><a href="https://github.com/tolaramlodera-hub/wardwise-voter-compass/pull/32" target="_blank" rel="noreferrer" className={btnOutline}>GitHub PR खोलें <ExternalLink className="h-3.5 w-3.5" /></a><a href="https://supabase.com/dashboard/project/litdtkqtserftjlkkatg" target="_blank" rel="noreferrer" className={btnOutline}>Supabase Dashboard <ExternalLink className="h-3.5 w-3.5" /></a></div></Card>
+    <p className="mt-3 text-xs text-muted-foreground">{checkedAt ? `अंतिम जाँच: ${checkedAt.toLocaleString("hi-IN")}` : "जाँच की प्रतीक्षा में"} · डेटा रिफ्रेश करने के लिए “अभी जाँचें” दबाएँ।</p>
+  </AppShell>;
+}

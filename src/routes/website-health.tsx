@@ -23,7 +23,8 @@ function WebsiteHealth() {
   const [health, setHealth] = useState<Health>(initial);
   const [loading, setLoading] = useState(false);
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
-  const [browserErrorCount, setBrowserErrorCount] = useState(0);\n  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [browserErrorCount, setBrowserErrorCount] = useState(0);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const runChecks = useCallback(async () => {
     setLoading(true);
     const next: Health = { ...initial };

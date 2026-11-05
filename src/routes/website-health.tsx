@@ -120,7 +120,9 @@ function WebsiteHealth() {
     };
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onRejection);
-    setHealth((previous) => ({ ...previous, errors: { state: Sentry.getClient() ? "ok" : "unavailable", detail: Sentry.getClient() ? "Sentry SDK सक्रिय है · Browser errors और unhandled promises रिपोर्ट होंगे; टेस्ट बटन से event भेजकर पुष्टि करें" : "Sentry DSN इस Preview deployment में उपलब्ध नहीं है" } }));
+    const dsnPresentInBuild = Boolean(import.meta.env.VITE_SENTRY_DSN);
+    const sentryClientReady = Boolean(Sentry.getClient());
+    setHealth((previous) => ({ ...previous, errors: { state: sentryClientReady ? "ok" : "unavailable", detail: `Preview build में DSN: ${dsnPresentInBuild ? "मिला" : "नहीं मिला"} · Sentry client: ${sentryClientReady ? "शुरू" : "शुरू नहीं हुआ"}${!dsnPresentInBuild ? " · Vercel build environment ने VITE_SENTRY_DSN inject नहीं किया" : !sentryClientReady ? " · DSN format या Sentry initialization जाँचें" : " · Browser errors और unhandled promises रिपोर्ट होंगे"}` } }));
     return () => {
       window.removeEventListener("error", onError);
       window.removeEventListener("unhandledrejection", onRejection);

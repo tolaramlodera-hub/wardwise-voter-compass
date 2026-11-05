@@ -63,7 +63,15 @@ function WebsiteHealth() {
       else next.vercel = { state: "ok", detail: `Vercel API कनेक्शन सही · पिछले 24 घंटे में ${data?.deployments?.length ?? 0} Build रिकॉर्ड मिले` };
     } catch (error) { next.vercel = { state: "error", detail: error instanceof Error ? error.message : "Vercel API जाँच विफल" }; }
 
-    try {\n      const storageStart = performance.now();\n      const { data: buckets, error: storageError } = await supabase.storage.listBuckets();\n      next.storage = storageError\n        ? { state: "unavailable", detail: `Storage bucket सूची नहीं पढ़ी जा सकी: ${storageError.message}` }\n        : { state: "ok", detail: buckets?.length ? `${buckets.length} Storage bucket उपलब्ध: ${buckets.map((bucket) => bucket.name).join(", ")} · फ़ाइलों का कुल आकार project metrics से अलग जाँचना होगा` : "अभी कोई Storage bucket configured नहीं है", duration: Math.round(performance.now() - storageStart) };\n    } catch (error) { next.storage = { state: "unavailable", detail: error instanceof Error ? error.message : "Storage जाँच विफल" }; }\n\n    setHealth(next);
+    try {
+      const storageStart = performance.now();
+      const { data: buckets, error: storageError } = await supabase.storage.listBuckets();
+      next.storage = storageError
+        ? { state: "unavailable", detail: `Storage bucket सूची नहीं पढ़ी जा सकी: ${storageError.message}` }
+        : { state: "ok", detail: buckets?.length ? `${buckets.length} Storage bucket उपलब्ध: ${buckets.map((bucket) => bucket.name).join(", ")} · फ़ाइलों का कुल आकार project metrics से अलग जाँचना होगा` : "अभी कोई Storage bucket configured नहीं है", duration: Math.round(performance.now() - storageStart) };
+    } catch (error) { next.storage = { state: "unavailable", detail: error instanceof Error ? error.message : "Storage जाँच विफल" }; }
+
+    setHealth(next);
     setCheckedAt(new Date());
     setLoading(false);
     const failures = [next.website, next.database, next.auth, next.vercel].filter((item) => item.state === "error").length;

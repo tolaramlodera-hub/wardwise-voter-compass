@@ -6,7 +6,8 @@ import { AppShell, Card, StatCard, btnOutline } from "@/components/AppShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Check = { state: "ok" | "error" | "pending" | "unavailable"; detail: string; duration?: number };
-type AuditEvent = { timestamp: string; action: string; actor: string; provider: string };\ntype Health = { website: Check; database: Check; auth: Check; github: Check; vercel: Check; errors: Check; storage: Check; loginAudit: Check };
+type AuditEvent = { timestamp: string; action: string; actor: string; provider: string };
+type Health = { website: Check; database: Check; auth: Check; github: Check; vercel: Check; errors: Check; storage: Check; loginAudit: Check };
 const initial: Health = {
   website: { state: "pending", detail: "जाँच बाकी" }, database: { state: "pending", detail: "जाँच बाकी" },
   auth: { state: "pending", detail: "जाँच बाकी" }, github: { state: "pending", detail: "जाँच बाकी" },

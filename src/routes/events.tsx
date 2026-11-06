@@ -31,6 +31,7 @@ function Events() {
   const [voterDetails, setVoterDetails] = useState<Voter[]>([]);
   const [allVoters, setAllVoters] = useState<Voter[]>([]);
   const [accountWards, setAccountWards] = useState<WardOption[]>([]);
+  const [householdWardSelection, setHouseholdWardSelection] = useState<string[]>([]);
   const [pendingLinkWard, setPendingLinkWard] = useState<Record<string, string>>({});
   const [pendingVoterAccounts, setPendingVoterAccounts] = useState<PendingVoterAccount[]>([]);
   const [pendingLinkSearch, setPendingLinkSearch] = useState<Record<string, string>>({});
@@ -145,8 +146,9 @@ function Events() {
   };
 
   const generateHouseholds = async (ev: EventRow) => {
+    if (!householdWardSelection.length) { toast.error("पहले कम से कम एक वार्ड चुनें"); return; }
     setBusy(true);
-    const { data: voters, error } = await supabase.from("voters").select("id,ward_id,house_number").not("house_number", "is", null).order("house_number");
+    const { data: voters, error } = await supabase.from("voters").select("id,ward_id,house_number").in("ward_id", householdWardSelection).not("house_number", "is", null).order("house_number");
     if (error) { setBusy(false); toast.error("मतदाता सूची नहीं मिली: " + error.message); return; }
     const groups = new Map<string, { ward_id: string; house_number: string; voter_ids: string[] }>();
     for (const v of voters ?? []) {
@@ -340,7 +342,14 @@ function Events() {
               {role === "admin" && selectedEvent.status === "pending" && <div className="flex gap-2"><button disabled={busy} className={btnPrimary} onClick={() => void reviewEvent(selectedEvent,"approved")}><Check className="h-4 w-4"/>स्वीकृत</button><button disabled={busy} className={btnOutline} onClick={() => void reviewEvent(selectedEvent,"rejected")}>अस्वीकृत</button></div>}
             </div>
             {selectedEvent.status === "approved" && (role === "admin" || selectedEvent.organizer_id === userId) && <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
-              {role === "admin" && <button disabled={busy} className={btnOutline} onClick={() => void generateHouseholds(selectedEvent)}><RefreshCw className="h-4 w-4"/>मतदाता सूची से घर तैयार करें</button>}
+              {role === "admin" && <div className="w-full space-y-2">
+                <div className="font-semibold text-sm">घर तैयार करने के लिए वार्ड चुनें</div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className={householdWardSelection.length === accountWards.length ? btnPrimary : btnOutline} onClick={() => setHouseholdWardSelection(accountWards.map((w) => w.id))}>सभी वार्ड</button>
+                  {accountWards.map((ward) => <button type="button" key={ward.id} className={householdWardSelection.includes(ward.id) ? btnPrimary : btnOutline} onClick={() => setHouseholdWardSelection((old) => old.includes(ward.id) ? old.filter((id) => id !== ward.id) : [...old, ward.id])}>{ward.name || ("वार्ड " + ward.ward_number)}</button>)}
+                </div>
+                <button disabled={busy || !householdWardSelection.length} className={btnOutline} onClick={() => void generateHouseholds(selectedEvent)}><RefreshCw className="h-4 w-4"/>मतदाता सूची से घर तैयार करें</button>
+              </div>}
               <select className={inputCls + " max-w-xs"} value={teamUser} onChange={(e) => setTeamUser(e.target.value)}><option value="">कॉलर चुनें</option>{profiles.filter((p) => p.user_id !== userId).map((p) => <option key={p.user_id} value={p.user_id}>{p.full_name} ({p.role})</option>)}</select>
               <button disabled={busy || !teamUser} className={btnPrimary} onClick={() => void appointMember()}><Users className="h-4 w-4"/>टीम में जोड़ें</button>
             </div>}

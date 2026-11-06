@@ -180,7 +180,7 @@ function Login() {
       </div>
 
       <div className="mb-5 grid grid-cols-3 gap-2 rounded-xl bg-muted p-1">
-        <button type="button" onClick={() => { setMode("otp"); setError(""); setNotice(""); }} className={`rounded-lg px-2 py-2 text-sm font-semibold ${mode === "otp" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>बिना पासवर्ड</button>
+        <button type="button" onClick={() => { setMode("otp"); setError(""); setNotice(""); }} className={`rounded-lg px-2 py-2 text-sm font-semibold ${mode === "otp" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Google लॉगिन</button>
         <button type="button" onClick={() => { setMode("password"); setError(""); setNotice(""); }} className={`rounded-lg px-2 py-2 text-sm font-semibold ${mode === "password" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>पासवर्ड</button>
         <button type="button" onClick={() => { setMode("signup"); setError(""); setNotice(""); }} className={`rounded-lg px-2 py-2 text-sm font-semibold ${mode === "signup" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>नया अकाउंट</button>
       </div>
@@ -196,18 +196,12 @@ function Login() {
           {notice && <p role="status" className="rounded-lg bg-primary/10 p-3 text-sm text-primary">{notice}</p>}
           <button type="submit" disabled={busy || !identifier.trim() || !password || !fullName.trim() || !voterIds.trim()} className={btnPrimary + " w-full"}>{busy ? "अकाउंट बनाया जा रहा है..." : "रजिस्ट्रेशन करें"}</button>
         </form>
-      ) : mode === "otp" ? (
-        <form onSubmit={sendMagicLink} className="space-y-3">
-          <p className="text-sm text-muted-foreground">फोन में पहले से लॉगिन Google अकाउंट चुनकर सुरक्षित प्रवेश करें।</p><button type="button" onClick={() => void startGoogleLogin()} disabled={busy} className={btnPrimary + " w-full"}>{busy ? "Google पर जा रहे हैं..." : "Google से जारी रखें"}</button>
-          <label className="block text-sm font-medium">रजिस्टर्ड ईमेल
-            <div className="relative mt-1"><Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input className={inputCls + " pl-9"} type="email" required value={identifier} onChange={e => setIdentifier(e.target.value)} placeholder="name@gmail.com" autoComplete="email" disabled={linkSent} /></div>
-          </label>
-
+       ) : mode === "otp" ? (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">फोन में पहले से लॉगिन Google अकाउंट चुनकर सुरक्षित प्रवेश करें।</p>
           {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-          {notice && <p role="status" className="rounded-lg bg-primary/10 p-3 text-sm text-primary">{notice}</p>}
-          <button type="submit" disabled={busy || !identifier.trim() || linkSent} className={btnPrimary + " w-full"}>{busy ? "कृपया प्रतीक्षा करें..." : "ईमेल पर लॉगिन लिंक भेजें"}</button>
-          {linkSent && <button type="button" onClick={() => { setLinkSent(false); setError(""); setNotice(""); }} className="w-full text-sm font-medium text-primary underline">दूसरा ईमेल डालें</button>}
-        </form>
+          <button type="button" onClick={() => void startGoogleLogin()} disabled={busy} className={btnPrimary + " w-full"}>{busy ? "Google पर जा रहे हैं..." : "Google से जारी रखें"}</button>
+        </div>
       ) : (
         <form onSubmit={submitPassword} className="space-y-3">
           <label className="block text-sm font-medium">ईमेल / लॉगिन ID

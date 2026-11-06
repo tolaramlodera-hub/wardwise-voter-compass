@@ -60,10 +60,10 @@ function Events() {
     if (p?.role === "admin") {
       const [{ data: voters }, { data: savedContacts }] = await Promise.all([
         supabase.from("voters").select("id,voter_id,full_name,relative_name,house_number,ward_id").order("full_name").limit(2500),
-        supabase.from("voter_contacts").select("voter_id,phone"),
+        supabase.from("voter_contacts").select("voter_id,phone,consent_to_event_contact"),
       ]);
       setAllVoters((voters ?? []) as Voter[]);
-      setContacts((savedContacts ?? []) as Contact[]);
+      setSavedContacts((savedContacts ?? []) as SavedContact[]);
     }
   };
 
@@ -252,7 +252,7 @@ function Events() {
       <p className="text-sm text-muted-foreground">इवेंट अनुमोदन, टीम नियुक्ति और साझा लाइव कॉलिंग सूची</p>
       <button className={btnPrimary} onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> नया इवेंट अनुरोध</button>
     </div>
-    {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-3 font-bold">मतदाता मोबाइल नंबर और संपर्क सहमति</h2><div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"><input className={inputCls} value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} placeholder="मतदाता नाम / पहचान संख्या खोजें"/><select className={inputCls} value={contactVoterId} onChange={(e) => { setContactVoterId(e.target.value); const found = contacts.find((x) => x.voter_id === e.target.value); setContactPhone(found?.phone ?? ""); setContactConsent(Boolean(found)); }}><option value="">मतदाता चुनें</option>{allVoters.filter((v) => !contactSearch || (v.full_name + " " + (v.voter_id ?? "")).toLowerCase().includes(contactSearch.toLowerCase())).slice(0,100).map((v) => <option key={v.id} value={v.id}>{v.full_name} · {v.voter_id ?? "ID नहीं"} · मकान {v.house_number ?? "-"}</option>)}</select><input className={inputCls} value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="मोबाइल नंबर" type="tel"/><button className={btnPrimary} disabled={busy || !contactVoterId} onClick={() => void saveContact()}>सेव करें</button></div><label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" checked={contactConsent} onChange={(e) => setContactConsent(e.target.checked)} className="mt-1"/>मतदाता ने इवेंट के संबंध में संपर्क करने की स्पष्ट सहमति दी है। बिना सहमति नंबर कॉलर को नहीं दिखेगा।</label></Card>}
+    {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-3 font-bold">मतदाता मोबाइल नंबर और संपर्क सहमति</h2><div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"><input className={inputCls} value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} placeholder="मतदाता नाम / पहचान संख्या खोजें"/><select className={inputCls} value={contactVoterId} onChange={(e) => { setContactVoterId(e.target.value); const found = savedContacts.find((x) => x.voter_id === e.target.value); setContactPhone(found?.phone ?? ""); setContactConsent(Boolean(found?.consent_to_event_contact)); }}><option value="">मतदाता चुनें</option>{allVoters.filter((v) => !contactSearch || (v.full_name + " " + (v.voter_id ?? "")).toLowerCase().includes(contactSearch.toLowerCase())).slice(0,100).map((v) => <option key={v.id} value={v.id}>{v.full_name} · {v.voter_id ?? "ID नहीं"} · मकान {v.house_number ?? "-"}</option>)}</select><input className={inputCls} value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="मोबाइल नंबर" type="tel"/><button className={btnPrimary} disabled={busy || !contactVoterId} onClick={() => void saveContact()}>सेव करें</button></div><label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" checked={contactConsent} onChange={(e) => setContactConsent(e.target.checked)} className="mt-1"/>मतदाता ने इवेंट के संबंध में संपर्क करने की स्पष्ट सहमति दी है। बिना सहमति नंबर कॉलर को नहीं दिखेगा।</label></Card>}
     <div className="grid gap-4 lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.5fr)]">
       <Card className="p-4">
         <h2 className="mb-3 flex items-center gap-2 font-bold"><CalendarDays className="h-5 w-5" /> इवेंट सूची</h2>

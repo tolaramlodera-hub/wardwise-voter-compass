@@ -30,6 +30,8 @@ function Events() {
   const [voterDetails, setVoterDetails] = useState<Voter[]>([]);
   const [allVoters, setAllVoters] = useState<Voter[]>([]);
   const [pendingVoterAccounts, setPendingVoterAccounts] = useState<PendingVoterAccount[]>([]);
+  const [pendingLinkSearch, setPendingLinkSearch] = useState<Record<string, string>>({});
+  const [pendingLinkSelection, setPendingLinkSelection] = useState<Record<string, string>>({});
   const [contactSearch, setContactSearch] = useState("");
   const [contactVoterId, setContactVoterId] = useState("");
   const [contactPhone, setContactPhone] = useState("");
@@ -188,8 +190,20 @@ function Events() {
     else { toast.success(outcome === "contacted" ? "संपर्क पूरा — सभी सदस्यों की सूची से हटाया गया" : "कॉल परिणाम सेव हुआ"); setClaimed(null); setNotes(""); await loadHouseholds(selected); }
   };
 
+  const linkPendingVoter = async (account: PendingVoterAccount) => {
+    const voterId = pendingLinkSelection[account.user_id];
+    if (!voterId) { toast.error("पहले सही मतदाता रिकॉर्ड चुनें"); return; }
+    setBusy(true);
+    const { error } = await supabase.rpc("admin_link_pending_voter", { p_user_id: account.user_id, p_voter_record_id: voterId });
+    setBusy(false);
+    if (error) toast.error("मतदाता रिकॉर्ड लिंक नहीं हुआ: " + error.message);
+    else { toast.success("मतदाता रिकॉर्ड सफलतापूर्वक लिंक हो गया"); setPendingLinkSelection((old) => ({ ...old, [account.user_id]: "" })); await load(); }
+  };
+
   const approveVoterAccount = async (account: PendingVoterAccount) => {
-    if (!account.voter_account_links?.length) { toast.error("इस अकाउंट से कोई मतदाता रिकॉर्ड जुड़ा नहीं है"); return; }
+    if (!account.voter_account_links?.length || account.voter_account_links.some((link) => !link.voters)) {
+      toast.error("पहले इस अकाउंट से सही मतदाता रिकॉर्ड लिंक करें"); return;
+    }
     setBusy(true);
     const { error } = await supabase.functions.invoke("admin-user-management", { body: { action: "toggle", user_id: account.user_id, is_active: true } });
     setBusy(false);
@@ -276,7 +290,25 @@ function Events() {
       <button className={btnPrimary} onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> नया इवेंट अनुरोध</button>
     </div>
     {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-3 font-bold">मतदाता मोबाइल नंबर और संपर्क सहमति</h2><div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"><input className={inputCls} value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} placeholder="मतदाता नाम / पहचान संख्या खोजें"/><select className={inputCls} value={contactVoterId} onChange={(e) => { setContactVoterId(e.target.value); const found = savedContacts.find((x) => x.voter_id === e.target.value); setContactPhone(found?.phone ?? ""); setContactConsent(Boolean(found?.consent_to_event_contact)); }}><option value="">मतदाता चुनें</option>{allVoters.filter((v) => !contactSearch || (v.full_name + " " + (v.voter_id ?? "")).toLowerCase().includes(contactSearch.toLowerCase())).slice(0,100).map((v) => <option key={v.id} value={v.id}>{v.full_name} · {v.voter_id ?? "ID नहीं"} · मकान {v.house_number ?? "-"}</option>)}</select><input className={inputCls} value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="मोबाइल नंबर" type="tel"/><button className={btnPrimary} disabled={busy || !contactVoterId} onClick={() => void saveContact()}>सेव करें</button></div><label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" checked={contactConsent} onChange={(e) => setContactConsent(e.target.checked)} className="mt-1"/>मतदाता ने इवेंट के संबंध में संपर्क करने की स्पष्ट सहमति दी है। बिना सहमति नंबर कॉलर को नहीं दिखेगा।</label></Card>}
-    {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-2 font-bold">नए मतदाता अकाउंट की जाँच</h2>{pendingVoterAccounts.length === 0 ? <p className="text-sm text-muted-foreground">कोई नया अकाउंट स्वीकृति के लिए लंबित नहीं है।</p> : <div className="space-y-2">{pendingVoterAccounts.map((account) => <div key={account.user_id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><b>{account.full_name}</b><div className="mt-1 text-xs text-muted-foreground">लिंक रिकॉर्ड: {account.voter_account_links?.map((link) => link.voters ? `${link.voters.full_name} (${link.voters.voter_id ?? "ID नहीं"}) · मकान ${link.voters.house_number ?? "-"}` : "रिकॉर्ड नहीं मिला").join(" | ") || "रिकॉर्ड उपलब्ध नहीं"}</div></div><button className={btnPrimary} disabled={busy || !account.voter_account_links?.length} onClick={() => void approveVoterAccount(account)}>जाँचकर सक्रिय करें</button></div>)}</div>}</Card>}
+    {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-2 font-bold">नए मतदाता अकाउंट की जाँच</h2>{pendingVoterAccounts.length === 0 ? <p className="text-sm text-muted-foreground">कोई नया अकाउंट स्वीकृति के लिए लंबित नहीं है।</p> : <div className="space-y-3">{pendingVoterAccounts.map((account) => {
+      const links = account.voter_account_links ?? [];
+      const linked = links.filter((link) => link.voters);
+      const searchText = (pendingLinkSearch[account.user_id] ?? "").trim().toLowerCase();
+      const candidates = allVoters.filter((v) => !searchText || [v.full_name, v.voter_id ?? "", v.house_number ?? ""].some((value) => value.toLowerCase().includes(searchText))).slice(0, 30);
+      return <div key={account.user_id} className="rounded-lg border p-3">
+        <div className="font-semibold">{account.full_name}</div>
+        <div className="mt-1 text-sm text-muted-foreground">लिंक रिकॉर्ड: {linked.map((link) => link.voters ? `${link.voters.full_name} (${link.voters.voter_id ?? "ID नहीं"}) · मकान ${link.voters.house_number ?? "-"}` : "").filter(Boolean).join(" | ") || "रिकॉर्ड उपलब्ध नहीं"}</div>
+        {!linked.length && <div className="mt-3 grid gap-2">
+          <input className={inputCls} value={pendingLinkSearch[account.user_id] ?? ""} onChange={(e) => setPendingLinkSearch((old) => ({ ...old, [account.user_id]: e.target.value }))} placeholder="मतदाता नाम या पहचान संख्या खोजें"/>
+          <select className={inputCls} value={pendingLinkSelection[account.user_id] ?? ""} onChange={(e) => setPendingLinkSelection((old) => ({ ...old, [account.user_id]: e.target.value }))}>
+            <option value="">सही मतदाता रिकॉर्ड चुनें</option>
+            {candidates.map((v) => <option key={v.id} value={v.id}>{v.full_name} · {v.voter_id ?? "ID नहीं"} · मकान {v.house_number ?? "-"}</option>)}
+          </select>
+          <button className={btnOutline} disabled={busy || !pendingLinkSelection[account.user_id]} onClick={() => void linkPendingVoter(account)}>मतदाता रिकॉर्ड लिंक करें</button>
+        </div>}
+        <button className={btnPrimary + " mt-3"} disabled={busy || !links.length || links.some((link) => !link.voters)} onClick={() => void approveVoterAccount(account)}>जाँचकर सक्रिय करें</button>
+      </div>;
+    })}</div>}</Card>}
     <div className="grid gap-4 lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.5fr)]">
       <Card className="p-4">
         <h2 className="mb-3 flex items-center gap-2 font-bold"><CalendarDays className="h-5 w-5" /> इवेंट सूची</h2>

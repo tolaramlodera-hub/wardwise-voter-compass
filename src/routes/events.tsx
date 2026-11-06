@@ -52,16 +52,19 @@ function Events() {
     const rows = (data ?? []) as Household[];
     setHouseholds(rows);
     const ids = [...new Set(rows.flatMap((h) => h.voter_ids))];
-    if (ids.length) {
-      const [{ data: phoneRows }, { data: claimRows }] = await Promise.all([
-        supabase.from("voter_contacts").select("voter_id,phone").in("voter_id", ids).eq("consent_to_event_contact", true),
-        supabase.from("event_call_claims").select("household_id,caller_id,expires_at").in("household_id", rows.map((h) => h.id)).gt("expires_at", new Date().toISOString()),
-      ]);
-      setContacts((phoneRows ?? []) as Contact[]);\n      setVoterDetails((voterRows ?? []) as Voter[]);\n      setCallRecords((recordRows ?? []) as typeof callRecords);
-      const next: Record<string, string> = {};
-      for (const c of claimRows ?? []) if (c.caller_id !== userId) next[c.household_id] = c.caller_id;
-      setClaims(next);
-    } else { setContacts([]); setVoterDetails([]); setClaims({}); setCallRecords([]); }
+    if (!ids.length) { setContacts([]); setVoterDetails([]); setClaims({}); setCallRecords([]); return; }
+    const [{ data: phoneRows }, { data: claimRows }, { data: voterRows }, { data: recordRows }] = await Promise.all([
+      supabase.from("voter_contacts").select("voter_id,phone").in("voter_id", ids).eq("consent_to_event_contact", true),
+      supabase.from("event_call_claims").select("household_id,caller_id,expires_at").in("household_id", rows.map((h) => h.id)).gt("expires_at", new Date().toISOString()),
+      supabase.from("voters").select("id,voter_id,full_name,relative_name,house_number,ward_id").in("id", ids),
+      supabase.from("event_calling_records").select("caller_id,outcome,created_at,household_id").in("household_id", rows.map((h) => h.id)).order("created_at", { ascending: false }),
+    ]);
+    setContacts((phoneRows ?? []) as Contact[]);
+    setVoterDetails((voterRows ?? []) as Voter[]);
+    setCallRecords((recordRows ?? []) as typeof callRecords);
+    const next: Record<string, string> = {};
+    for (const claim of claimRows ?? []) if (claim.caller_id !== userId) next[claim.household_id] = claim.caller_id;
+    setClaims(next);
   };
 
   useEffect(() => { void load(); }, []);

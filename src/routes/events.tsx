@@ -286,7 +286,6 @@ function Events() {
       <p className="text-sm text-muted-foreground">इवेंट अनुमोदन, टीम नियुक्ति और साझा लाइव कॉलिंग सूची</p>
       <button className={btnPrimary} onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> नया इवेंट अनुरोध</button>
     </div>
-}
     {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-2 font-bold">नए मतदाता अकाउंट की जाँच</h2>{pendingVoterAccounts.length === 0 ? <p className="text-sm text-muted-foreground">कोई नया अकाउंट स्वीकृति के लिए लंबित नहीं है।</p> : <div className="space-y-3">{pendingVoterAccounts.map((account) => {
       const links = account.voter_account_links ?? [];
       const linked = links.filter((link) => link.voters);

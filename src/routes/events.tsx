@@ -12,7 +12,8 @@ type Contact = { voter_id: string; phone: string };
 type SavedContact = { voter_id: string; phone: string; consent_to_event_contact: boolean };
 type Voter = { id: string; voter_id: string | null; full_name: string; relative_name: string | null; house_number: string | null; ward_id: string };
 type WardOption = { id: string; ward_number: number; name: string; is_active: boolean };
-type PendingVoterAccount = { user_id: string; full_name: string; voter_account_links: { voters: { full_name: string; voter_id: string | null; house_number: string | null } | null }[] };
+type PendingVoterAccount = { user_id: string; full_name: string; voter_account_links: { voters: { id: string; full_name: string; voter_id: string | null; house_number: string | null } | null }[] };
+type PendingContactSubmission = { user_id: string; phone: string; consent_to_event_contact: boolean; submitted_at: string };
 const eventStatusLabels: Record<string, string> = { pending: "अनुमोदन लंबित", approved: "स्वीकृत", rejected: "अस्वीकृत", closed: "बंद" };
 
 export const Route = createFileRoute("/events")({ head: () => ({ meta: [{ title: "इवेंट एवं संपर्क प्रबंधन" }] }), component: Events });
@@ -34,6 +35,7 @@ function Events() {
   const [householdWardSelection, setHouseholdWardSelection] = useState<string[]>([]);
   const [pendingLinkWard, setPendingLinkWard] = useState<Record<string, string>>({});
   const [pendingVoterAccounts, setPendingVoterAccounts] = useState<PendingVoterAccount[]>([]);
+  const [pendingContactSubmissions, setPendingContactSubmissions] = useState<PendingContactSubmission[]>([]);
   const [pendingLinkSearch, setPendingLinkSearch] = useState<Record<string, string>>({});
   const [pendingLinkSelection, setPendingLinkSelection] = useState<Record<string, string>>({});
   const [contactSearch, setContactSearch] = useState("");
@@ -66,16 +68,18 @@ function Events() {
     const { data: people } = await supabase.from("profiles").select("user_id,full_name,role").eq("is_active", true).order("full_name");
     setProfiles((people ?? []) as Profile[]);
     if (p?.role === "admin") {
-      const [{ data: voters }, { data: savedContacts }, { data: pendingAccounts }, { data: wardRows }] = await Promise.all([
+      const [{ data: voters }, { data: savedContacts }, { data: pendingAccounts }, { data: wardRows }, { data: pendingContacts }] = await Promise.all([
         supabase.from("voters").select("id,voter_id,full_name,relative_name,house_number,ward_id").order("full_name").limit(2500),
         supabase.from("voter_contacts").select("voter_id,phone,consent_to_event_contact"),
-        supabase.from("profiles").select("user_id,full_name,voter_account_links(voters(full_name,voter_id,house_number))").eq("role", "voter").eq("is_active", false),
+        supabase.from("profiles").select("user_id,full_name,voter_account_links(voters(id,full_name,voter_id,house_number))").eq("role", "voter").eq("is_active", false),
         supabase.from("wards").select("id,ward_number,name,is_active").eq("is_active", true).order("ward_number"),
+        supabase.from("pending_voter_contact_submissions").select("user_id,phone,consent_to_event_contact,submitted_at"),
       ]);
       setAllVoters((voters ?? []) as Voter[]);
       setAccountWards((wardRows ?? []) as WardOption[]);
       setSavedContacts((savedContacts ?? []) as SavedContact[]);
       setPendingVoterAccounts((pendingAccounts ?? []) as unknown as PendingVoterAccount[]);
+      setPendingContactSubmissions((pendingContacts ?? []) as PendingContactSubmission[]);
     }
   };
 
@@ -211,11 +215,21 @@ function Events() {
     if (!account.voter_account_links?.length || account.voter_account_links.some((link) => !link.voters)) {
       toast.error("पहले इस अकाउंट से सही मतदाता रिकॉर्ड लिंक करें"); return;
     }
+    const submission = pendingContactSubmissions.find((item) => item.user_id === account.user_id);
+    if (!submission) { toast.error("मतदाता का मोबाइल नंबर रजिस्ट्रेशन में नहीं मिला। उससे दोबारा जानकारी भरवाएँ।"); return; }
     setBusy(true);
+    const contactRows = account.voter_account_links.map((link) => ({
+      voter_id: link.voters!.id, phone: submission.phone,
+      consent_to_event_contact: submission.consent_to_event_contact,
+      consent_recorded_at: submission.consent_to_event_contact ? submission.submitted_at : null,
+      updated_by: userId, updated_at: new Date().toISOString(),
+    }));
+    const { error: contactError } = await supabase.from("voter_contacts").upsert(contactRows, { onConflict: "voter_id" });
+    if (contactError) { setBusy(false); toast.error("मोबाइल नंबर मतदाता रिकॉर्ड में सेव नहीं हुआ: " + contactError.message); return; }
     const { error } = await supabase.functions.invoke("admin-user-management", { body: { action: "toggle", user_id: account.user_id, is_active: true } });
     setBusy(false);
-    if (error) toast.error("अकाउंट सक्रिय नहीं हुआ: " + error.message);
-    else { toast.success("मतदाता अकाउंट सक्रिय कर दिया गया"); await load(); }
+    if (error) toast.error("मोबाइल नंबर सेव हुआ, लेकिन अकाउंट सक्रिय नहीं हुआ: " + error.message);
+    else { toast.success("मोबाइल नंबर और सहमति जाँचकर मतदाता अकाउंट सक्रिय कर दिया गया"); await load(); }
   };
 
   const saveContact = async () => {
@@ -305,6 +319,8 @@ function Events() {
       const candidates = allVoters.filter((v) => (!selectedWard || v.ward_id === selectedWard) && (!searchText || [v.full_name, v.voter_id ?? "", v.house_number ?? ""].some((value) => value.toLowerCase().includes(searchText)))).slice(0, 100);
       return <div key={account.user_id} className="rounded-lg border p-3">
         <div className="font-semibold">{account.full_name}</div>
+        <div className="mt-1 text-sm">मोबाइल: {pendingContactSubmissions.find((item) => item.user_id === account.user_id)?.phone ?? "नंबर उपलब्ध नहीं"}</div>
+        <div className="text-sm text-muted-foreground">इवेंट संपर्क सहमति: {pendingContactSubmissions.find((item) => item.user_id === account.user_id)?.consent_to_event_contact ? "हाँ" : "नहीं"}</div>
         <div className="mt-1 text-sm text-muted-foreground">लिंक रिकॉर्ड: {linked.map((link) => link.voters ? `${link.voters.full_name} (${link.voters.voter_id ?? "ID नहीं"}) · मकान ${link.voters.house_number ?? "-"}` : "").filter(Boolean).join(" | ") || "रिकॉर्ड उपलब्ध नहीं"}</div>
         {!linked.length && <div className="mt-3 grid gap-3">
           <div>

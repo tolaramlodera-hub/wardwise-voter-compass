@@ -11,6 +11,7 @@ type Profile = { user_id: string; full_name: string; role: string };
 type Contact = { voter_id: string; phone: string };
 type SavedContact = { voter_id: string; phone: string; consent_to_event_contact: boolean };
 type Voter = { id: string; voter_id: string | null; full_name: string; relative_name: string | null; house_number: string | null; ward_id: string };
+type WardOption = { id: string; ward_number: number; name: string; is_active: boolean };
 type PendingVoterAccount = { user_id: string; full_name: string; voter_account_links: { voters: { full_name: string; voter_id: string | null; house_number: string | null } | null }[] };
 const eventStatusLabels: Record<string, string> = { pending: "अनुमोदन लंबित", approved: "स्वीकृत", rejected: "अस्वीकृत", closed: "बंद" };
 
@@ -29,6 +30,8 @@ function Events() {
   const [savedContacts, setSavedContacts] = useState<SavedContact[]>([]);
   const [voterDetails, setVoterDetails] = useState<Voter[]>([]);
   const [allVoters, setAllVoters] = useState<Voter[]>([]);
+  const [accountWards, setAccountWards] = useState<WardOption[]>([]);
+  const [pendingLinkWard, setPendingLinkWard] = useState<Record<string, string>>({});
   const [pendingVoterAccounts, setPendingVoterAccounts] = useState<PendingVoterAccount[]>([]);
   const [pendingLinkSearch, setPendingLinkSearch] = useState<Record<string, string>>({});
   const [pendingLinkSelection, setPendingLinkSelection] = useState<Record<string, string>>({});
@@ -62,12 +65,14 @@ function Events() {
     const { data: people } = await supabase.from("profiles").select("user_id,full_name,role").eq("is_active", true).order("full_name");
     setProfiles((people ?? []) as Profile[]);
     if (p?.role === "admin") {
-      const [{ data: voters }, { data: savedContacts }, { data: pendingAccounts }] = await Promise.all([
+      const [{ data: voters }, { data: savedContacts }, { data: pendingAccounts }, { data: wardRows }] = await Promise.all([
         supabase.from("voters").select("id,voter_id,full_name,relative_name,house_number,ward_id").order("full_name").limit(2500),
         supabase.from("voter_contacts").select("voter_id,phone,consent_to_event_contact"),
         supabase.from("profiles").select("user_id,full_name,voter_account_links(voters(full_name,voter_id,house_number))").eq("role", "voter").eq("is_active", false),
+        supabase.from("wards").select("id,ward_number,name,is_active").eq("is_active", true).order("ward_number"),
       ]);
       setAllVoters((voters ?? []) as Voter[]);
+      setAccountWards((wardRows ?? []) as WardOption[]);
       setSavedContacts((savedContacts ?? []) as SavedContact[]);
       setPendingVoterAccounts((pendingAccounts ?? []) as unknown as PendingVoterAccount[]);
     }
@@ -294,14 +299,22 @@ function Events() {
       const links = account.voter_account_links ?? [];
       const linked = links.filter((link) => link.voters);
       const searchText = (pendingLinkSearch[account.user_id] ?? "").trim().toLowerCase();
-      const candidates = allVoters.filter((v) => !searchText || [v.full_name, v.voter_id ?? "", v.house_number ?? ""].some((value) => value.toLowerCase().includes(searchText))).slice(0, 30);
+      const selectedWard = pendingLinkWard[account.user_id] ?? "";
+      const candidates = allVoters.filter((v) => (!selectedWard || v.ward_id === selectedWard) && (!searchText || [v.full_name, v.voter_id ?? "", v.house_number ?? ""].some((value) => value.toLowerCase().includes(searchText)))).slice(0, 100);
       return <div key={account.user_id} className="rounded-lg border p-3">
         <div className="font-semibold">{account.full_name}</div>
         <div className="mt-1 text-sm text-muted-foreground">लिंक रिकॉर्ड: {linked.map((link) => link.voters ? `${link.voters.full_name} (${link.voters.voter_id ?? "ID नहीं"}) · मकान ${link.voters.house_number ?? "-"}` : "").filter(Boolean).join(" | ") || "रिकॉर्ड उपलब्ध नहीं"}</div>
-        {!linked.length && <div className="mt-3 grid gap-2">
-          <input className={inputCls} value={pendingLinkSearch[account.user_id] ?? ""} onChange={(e) => setPendingLinkSearch((old) => ({ ...old, [account.user_id]: e.target.value }))} placeholder="मतदाता नाम या पहचान संख्या खोजें"/>
+        {!linked.length && <div className="mt-3 grid gap-3">
+          <div>
+            <div className="mb-2 text-sm font-semibold">पहले वार्ड चुनें</div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className={(!selectedWard ? btnPrimary : btnOutline)} onClick={() => { setPendingLinkWard((old) => ({ ...old, [account.user_id]: "" })); setPendingLinkSelection((old) => ({ ...old, [account.user_id]: "" })); }}>सभी वार्ड</button>
+              {accountWards.map((ward) => <button type="button" key={ward.id} className={(selectedWard === ward.id ? btnPrimary : btnOutline)} onClick={() => { setPendingLinkWard((old) => ({ ...old, [account.user_id]: ward.id })); setPendingLinkSelection((old) => ({ ...old, [account.user_id]: "" })); }}>{ward.name || `वार्ड ${ward.ward_number}`}</button>)}
+            </div>
+          </div>
+          <input className={inputCls} value={pendingLinkSearch[account.user_id] ?? ""} onChange={(e) => setPendingLinkSearch((old) => ({ ...old, [account.user_id]: e.target.value }))} placeholder="चुने हुए वार्ड में नाम, मकान या पहचान संख्या खोजें"/>
           <select className={inputCls} value={pendingLinkSelection[account.user_id] ?? ""} onChange={(e) => setPendingLinkSelection((old) => ({ ...old, [account.user_id]: e.target.value }))}>
-            <option value="">सही मतदाता रिकॉर्ड चुनें</option>
+            <option value="">सही मतदाता रिकॉर्ड चुनें ({candidates.length} रिकॉर्ड)</option>
             {candidates.map((v) => <option key={v.id} value={v.id}>{v.full_name} · {v.voter_id ?? "ID नहीं"} · मकान {v.house_number ?? "-"}</option>)}
           </select>
           <button className={btnOutline} disabled={busy || !pendingLinkSelection[account.user_id]} onClick={() => void linkPendingVoter(account)}>मतदाता रिकॉर्ड लिंक करें</button>

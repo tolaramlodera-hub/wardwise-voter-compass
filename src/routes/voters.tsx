@@ -2,14 +2,18 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Pencil, X, Save, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell, Card, WardSelect, inputCls, btnOutline, btnPrimary } from "@/components/AppShell";
-import { VoterTable } from "@/components/VoterTable";
+import { AppShell, Card, inputCls, btnOutline, btnPrimary } from "@/components/AppShell";
 import { VoterCsvImport } from "@/components/VoterCsvImport";
 import type { Voter } from "@/lib/mock-data";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
+type WardOption = { id: string; ward_number: number; name: string; is_active: boolean };
+
 type VoterRow = {
   id: string;
+  ward_id: string;
+  family_group: string | null;
+  family_label: string | null;
   voter_id: string | null;
   serial_no: number | null;
   full_name: string;
@@ -19,6 +23,8 @@ type VoterRow = {
   house_number: string | null;
   wards: { ward_number: number } | null;
 };
+
+type HouseholdGroup = { key: string; ward: number; house: string; familyLabel: string; members: Voter[] };
 
 type EditForm = {
   id: string;
@@ -45,6 +51,13 @@ export const Route = createFileRoute("/voters")({
 
 function Voters() {
   const [voters, setVoters] = useState<Voter[]>([]);
+  const [wards, setWards] = useState<WardOption[]>([]);
+  const [wardsLoading, setWardsLoading] = useState(true);
+  const [groups, setGroups] = useState<HouseholdGroup[]>([]);
+  const [familyOpen, setFamilyOpen] = useState<HouseholdGroup | null>(null);
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [newFamilyLabel, setNewFamilyLabel] = useState("");
+  const [splitting, setSplitting] = useState(false);
   const [ward, setWard] = useState(0);
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
@@ -59,48 +72,70 @@ function Voters() {
 
   const loadVoters = useCallback(async () => {
     setLoading(true);
-    let query = supabase
-      .from("voters")
-      .select("id,voter_id,serial_no,full_name,relative_name,age,gender,house_number,wards!inner(ward_number)", { count: "exact" })
-      .order("serial_no", { ascending: true, nullsFirst: false });
-    if (ward) query = query.eq("wards.ward_number", ward);
-    const term = search.trim().replace(/[,.%()]/g, " ").replace(/\s+/g, " ").slice(0, 80);
-    if (term) {
-      const clauses = [
-        "full_name.ilike.%" + term + "%",
-        "voter_id.ilike.%" + term + "%",
-        "house_number.ilike.%" + term + "%",
-      ];
-      if (/^\d+$/.test(term)) clauses.push("serial_no.eq." + Number(term));
-      query = query.or(clauses.join(","));
+    const allRows: VoterRow[] = [];
+    let from = 0;
+    const chunkSize = 1000;
+    while (true) {
+      let query = supabase.from("voters")
+        .select("id,ward_id,voter_id,serial_no,full_name,relative_name,age,gender,house_number,family_group,family_label,wards!inner(ward_number)")
+        .order("serial_no", { ascending: true, nullsFirst: false })
+        .range(from, from + chunkSize - 1);
+      if (ward) query = query.eq("wards.ward_number", ward);
+      const { data, error } = await query;
+      if (error) {
+        toast.error("मतदाता सूची लोड नहीं हुई: " + error.message);
+        setLoading(false);
+        return;
+      }
+      const chunk = (data ?? []) as unknown as VoterRow[];
+      allRows.push(...chunk);
+      if (chunk.length < chunkSize) break;
+      from += chunkSize;
     }
-    const { data, count, error } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
-    if (error) {
-      toast.error("मतदाता सूची लोड नहीं हुई: " + error.message);
-      setLoading(false);
-      return;
-    }
-    setTotalRows(count ?? 0);
-    const rows = (data ?? []) as unknown as VoterRow[];
-    setVoters(rows.map((v) => ({
-      id: v.id,
-      serialNo: v.serial_no ?? undefined,
-      name: v.full_name,
-      relative: v.relative_name ?? "",
-      age: v.age ?? 0,
-      gender: v.gender === "महिला" || v.gender === "अन्य" ? v.gender : "पुरुष",
-      house: v.house_number ?? "",
-      voterId: v.voter_id ?? "",
-      ward: v.wards?.ward_number ?? 0,
-    })));
+    const mapped = allRows.map((v) => ({
+      id: v.id, serialNo: v.serial_no ?? undefined, name: v.full_name,
+      relative: v.relative_name ?? "", age: v.age ?? 0,
+      gender: v.gender === "महिला" || v.gender === "अन्य" ? v.gender : "पुरुष" as const,
+      house: v.house_number ?? "", voterId: v.voter_id ?? "", ward: v.wards?.ward_number ?? 0,
+    }));
+    const buckets = new Map<string, HouseholdGroup>();
+    allRows.forEach((row, index) => {
+      const house = (row.house_number ?? "").trim();
+      const key = house ? row.ward_id + "|" + house + "|" + (row.family_group ?? "main") : "individual|" + row.id;
+      const person = mapped[index];
+      const existing = buckets.get(key);
+      if (existing) existing.members.push(person);
+      else buckets.set(key, { key, ward: row.wards?.ward_number ?? 0, house, familyLabel: row.family_label || "मुख्य परिवार", members: [person] });
+    });
+    let householdList = Array.from(buckets.values()).map((g) => ({
+      ...g, members: [...g.members].sort((a, b) => (a.serialNo ?? 999999) - (b.serialNo ?? 999999)),
+    }));
+    const term = search.trim().toLocaleLowerCase("hi-IN");
+    if (term) householdList = householdList.filter((g) =>
+      g.house.toLocaleLowerCase("hi-IN").includes(term) ||
+      g.familyLabel.toLocaleLowerCase("hi-IN").includes(term) ||
+      g.members.some((m) => [m.name, m.relative, m.voterId, String(m.serialNo ?? "")].some((x) => x.toLocaleLowerCase("hi-IN").includes(term)))
+    );
+    householdList.sort((a, b) => a.ward - b.ward || (a.members[0]?.serialNo ?? 999999) - (b.members[0]?.serialNo ?? 999999));
+    setGroups(householdList);
+    setTotalRows(householdList.length);
+    setVoters(householdList.slice(page * pageSize, (page + 1) * pageSize).map((g) => g.members[0]));
     setLoading(false);
   }, [supabase, ward, search, page]);
 
   useEffect(() => {
     let active = true;
     const requestedWard = Number(new URLSearchParams(window.location.search).get("ward"));
-    if (Number.isInteger(requestedWard) && requestedWard >= 1 && requestedWard <= 7) setWard(requestedWard);
     const init = async () => {
+      setWards(Array.from({ length: 7 }, (_, i) => ({ id: "fallback-" + (i + 1), ward_number: i + 1, name: "वार्ड " + (i + 1), is_active: true })));
+      const { data: wardRows, error: wardError } = await supabase.from("wards").select("id,ward_number,name,is_active").eq("is_active", true).order("ward_number");
+      if (wardError) toast.error("वार्ड सूची लोड नहीं हुई: " + wardError.message);
+      if (active) {
+        const availableWards = (wardRows ?? []) as WardOption[];
+        setWards(availableWards.length ? availableWards : Array.from({ length: 7 }, (_, i) => ({ id: "fallback-" + (i + 1), ward_number: i + 1, name: "वार्ड " + (i + 1), is_active: true })));
+        if (Number.isInteger(requestedWard) && availableWards.some((w) => w.ward_number === requestedWard)) setWard(requestedWard);
+      }
+      setWardsLoading(false);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data: profile } = await supabase.from("profiles").select("role,is_active").eq("user_id", user.id).maybeSingle();
@@ -118,6 +153,37 @@ function Voters() {
   useEffect(() => { void loadVoters(); }, [loadVoters]);
 
   const list = voters;
+
+  const openFamily = (group: HouseholdGroup) => {
+    setFamilyOpen(group);
+    setSelectedMembers([]);
+    setNewFamilyLabel("");
+  };
+
+  const splitFamily = async () => {
+    if (!familyOpen || selectedMembers.length < 1 || !newFamilyLabel.trim()) {
+      toast.error("सदस्य चुनें और नए परिवार का नाम लिखें");
+      return;
+    }
+    if (selectedMembers.length >= familyOpen.members.length) {
+      toast.error("मूल परिवार में कम-से-कम एक सदस्य रहना चाहिए");
+      return;
+    }
+    setSplitting(true);
+    const { error } = await supabase.rpc("split_voter_household", {
+      p_voter_ids: selectedMembers,
+      p_family_label: newFamilyLabel.trim(),
+    });
+    setSplitting(false);
+    if (error) {
+      toast.error("अलग परिवार नहीं बन पाया: " + error.message);
+      return;
+    }
+    toast.success("चुने हुए सदस्यों का अलग परिवार बन गया");
+    setFamilyOpen(null);
+    setSelectedMembers([]);
+    await loadVoters();
+  };
 
   const openEdit = (v: Voter) => setEditing({
     id: v.id, voterId: v.voterId, serialNo: String(v.serialNo ?? ""),
@@ -159,22 +225,68 @@ function Voters() {
       {canEdit && (ward > 0 ? <VoterCsvImport wardNumber={ward} onComplete={() => { setPage(0); void loadVoters(); }} /> : <Card className="mb-4 border-dashed p-5"><p className="text-sm text-muted-foreground">CSV अपलोड करने के लिए पहले ऊपर से एक वार्ड चुनें।</p></Card>)}
 
       <Card>
-        <div className="flex flex-wrap gap-2 border-b p-4">
-          <WardSelect value={ward} onChange={(value) => { setWard(value); setPage(0); }} />
-          <div className="relative min-w-48 flex-1">
+        <div className="border-b p-4">
+          <div className="mb-3 flex flex-wrap gap-2" aria-label="वार्ड चुनें">
+            <button type="button" onClick={() => { setWard(0); setPage(0); }} className={"rounded-lg border px-4 py-2 text-sm font-semibold " + (ward === 0 ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted")}>सभी वार्ड</button>
+            {wards.map((w) => <button key={w.id} type="button" onClick={() => { setWard(w.ward_number); setPage(0); }} className={"rounded-lg border px-4 py-2 text-sm font-semibold " + (ward === w.ward_number ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted")}>{"वार्ड " + w.ward_number + (w.name ? " · " + w.name : "")}</button>)}
+          </div>
+          {wardsLoading && <p className="mb-2 text-xs text-muted-foreground">वार्ड लोड हो रहे हैं...</p>}
+          <div className="relative min-w-48">
             <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-            <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} className={inputCls + " pl-9"} placeholder="क्रमांक, नाम, वोटर ID या मकान नंबर" />
+            <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} className={inputCls + " pl-9"} placeholder="नाम, पिता/पति का नाम, वोटर ID या मकान नंबर खोजें" />
           </div>
         </div>
-        <div className="px-4 py-2 text-xs text-muted-foreground">{loading ? "सूची लोड हो रही है..." : `कुल ${totalRows} मतदाता · ${Math.min(totalRows, page * pageSize + 1)}–${Math.min(totalRows, (page + 1) * pageSize)} दिख रहे हैं`}</div>
-        {loading ? <div className="p-8 text-center"><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></div> :
-          <VoterTable voters={list} action={canEdit ? (v) => <button type="button" className={btnOutline} onClick={() => openEdit(v)}><Pencil className="h-4 w-4" /> एडिट</button> : undefined} />}
+        <div className="px-4 py-2 text-xs text-muted-foreground">{loading ? "सूची लोड हो रही है..." : `कुल ${totalRows} मकान/परिवार · ${Math.min(totalRows, page * pageSize + 1)}–${Math.min(totalRows, (page + 1) * pageSize)} दिख रहे हैं`}</div>
+        {loading ? <div className="p-8 text-center"><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></div> : !list.length ? <div className="p-8 text-center text-sm text-muted-foreground">कोई मकान/परिवार नहीं मिला</div> :
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted text-left text-muted-foreground"><tr>{["क्रमांक","मकान नंबर","मुख्य मतदाता","परिवार","कुल सदस्य","वार्ड","विवरण"].map((h) => <th key={h} className="px-3 py-3 font-medium">{h}</th>)}</tr></thead>
+              <tbody>{groups.slice(page * pageSize, (page + 1) * pageSize).map((g) => {
+                const head = g.members[0];
+                return <tr key={g.key} className="border-t hover:bg-muted/40">
+                  <td className="px-3 py-3">{head.serialNo ?? "—"}</td>
+                  <td className="px-3 py-3 font-semibold">{g.house || "—"}</td>
+                  <td className="px-3 py-3"><div className="font-semibold">{head.name}</div><div className="text-xs text-muted-foreground">{head.relative}</div></td>
+                  <td className="px-3 py-3">{g.familyLabel}</td>
+                  <td className="px-3 py-3">{g.members.length}</td>
+                  <td className="px-3 py-3">{g.ward}</td>
+                  <td className="px-3 py-3"><div className="flex flex-wrap gap-2"><button type="button" className={btnOutline} onClick={() => openFamily(g)}>परिवार देखें</button>{canEdit && <button type="button" className={btnOutline} onClick={() => openEdit(head)}><Pencil className="h-4 w-4" /> एडिट</button>}</div></td>
+                </tr>;
+              })}</tbody>
+            </table>
+          </div>}
         <div className="flex items-center justify-between border-t p-3">
           <button type="button" className={btnOutline} disabled={loading || page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>← पिछला</button>
           <span className="text-sm text-muted-foreground">पेज {page + 1} / {Math.max(1, Math.ceil(totalRows / pageSize))}</span>
           <button type="button" className={btnOutline} disabled={loading || (page + 1) * pageSize >= totalRows} onClick={() => setPage((p) => p + 1)}>अगला →</button>
         </div>
       </Card>
+
+      {familyOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/50 p-3" role="dialog" aria-modal="true" aria-label="परिवार के सदस्य">
+          <div className="my-auto w-full max-w-3xl rounded-xl border bg-card p-5 shadow-xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div><h2 className="text-lg font-bold">मकान {familyOpen.house} — परिवार के सदस्य</h2><p className="text-sm text-muted-foreground">वार्ड {familyOpen.ward} · {familyOpen.familyLabel} · {familyOpen.members.length} सदस्य</p></div>
+              <button type="button" className={btnOutline} onClick={() => setFamilyOpen(null)}>बंद करें</button>
+            </div>
+            <div className="max-h-72 overflow-y-auto rounded-lg border">
+              {familyOpen.members.map((m) => <div key={m.id} className="flex items-center justify-between gap-3 border-b p-3 last:border-0">
+                <div className="flex min-w-0 items-center gap-3">
+                  {canEdit && <input aria-label={m.name + " चुनें"} type="checkbox" checked={selectedMembers.includes(m.id)} onChange={(e) => setSelectedMembers((old) => e.target.checked ? [...old, m.id] : old.filter((id) => id !== m.id))} />}
+                  <div className="min-w-0"><div className="font-semibold">{m.serialNo ?? "—"}. {m.name}</div><div className="text-xs text-muted-foreground">पिता/पति: {m.relative || "—"} · उम्र: {m.age || "—"} · वोटर ID: {m.voterId || "—"}</div></div>
+                </div>
+                {canEdit && <button type="button" className={btnOutline} onClick={() => openEdit(m)}>एडिट</button>}
+              </div>)}
+            </div>
+            {canEdit && <div className="mt-4 rounded-lg border border-dashed p-3">
+              <p className="mb-2 text-sm font-semibold">चुने हुए सदस्यों का अलग परिवार बनाएँ</p>
+              <p className="mb-2 text-xs text-muted-foreground">मकान नंबर वही रहेगा; केवल परिवार अलग होगा। मूल परिवार में कम-से-कम एक सदस्य बचना जरूरी है।</p>
+              <input className={inputCls} value={newFamilyLabel} onChange={(e) => setNewFamilyLabel(e.target.value)} placeholder="नए परिवार का नाम, जैसे रामलाल परिवार" />
+              <div className="mt-2 flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{selectedMembers.length} सदस्य चुने</span><button type="button" className={btnPrimary} disabled={splitting || !selectedMembers.length || !newFamilyLabel.trim()} onClick={() => void splitFamily()}>{splitting ? "बन रहा है..." : "अलग परिवार बनाएँ"}</button></div>
+            </div>}
+          </div>
+        </div>
+      )}
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-3" role="dialog" aria-modal="true" aria-label="मतदाता विवरण एडिट करें">

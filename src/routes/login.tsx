@@ -14,6 +14,8 @@ function Login() {
   const [mode, setMode] = useState<"password" | "otp" | "signup">("otp");
   const [fullName, setFullName] = useState("");
   const [voterIds, setVoterIds] = useState("");
+  const [mobile, setMobile] = useState("");
+  const [contactConsent, setContactConsent] = useState(false);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [linkSent, setLinkSent] = useState(false);
@@ -55,13 +57,15 @@ function Login() {
       .select("role,is_active").eq("user_id", user.id).maybeSingle();
     if (readError) return { error: readError.message, pending: false };
     if (existing) return { error: "", pending: !existing.is_active };
-    let pendingSignup: { fullName?: string; voterIds?: string[] } | null = null;
+    let pendingSignup: { fullName?: string; voterIds?: string[]; phone?: string; consentToEventContact?: boolean } | null = null;
     try { pendingSignup = JSON.parse(sessionStorage.getItem("pending_google_voter") || "null"); } catch { pendingSignup = null; }
     if (user.user_metadata?.account_type !== "voter" && !pendingSignup) return { error: "यह Google अकाउंट अभी किसी सक्रिय यूजर से जुड़ा नहीं है। नया अकाउंट बनाने के लिए नया अकाउंट विकल्प चुनें।", pending: false };
     const name = String(user.user_metadata.full_name || pendingSignup?.fullName || "").trim();
     const ids = Array.isArray(user.user_metadata.voter_ids) ? user.user_metadata.voter_ids.map(String) : (pendingSignup?.voterIds ?? []);
     if (!name || !ids.length) return { error: "रजिस्ट्रेशन में नाम या मतदाता पहचान संख्या नहीं मिली।", pending: false };
-    const { data: registration, error: registrationError } = await supabase.rpc("register_google_voter", { p_full_name: name, p_voter_ids: ids });
+    const phone = String(user.user_metadata.phone || pendingSignup?.phone || "").trim();
+    const consent = Boolean(pendingSignup?.consentToEventContact);
+    const { data: registration, error: registrationError } = await supabase.rpc("register_google_voter", { p_full_name: name, p_voter_ids: ids, p_phone: phone, p_consent_to_event_contact: consent });
     if (registrationError) return { error: "Google रजिस्ट्रेशन पूरा नहीं हुआ: " + registrationError.message, pending: false };
     sessionStorage.removeItem("pending_google_voter");
     return { error: "", pending: registration?.status === "pending_admin_approval" };
@@ -70,8 +74,8 @@ function Login() {
   const submitSignup = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const ids = voterIds.split(",").map((v) => v.trim()).filter(Boolean);
-    if (!fullName.trim() || !ids.length) { setError("पूरा नाम और कम से कम एक मतदाता पहचान संख्या भरें।"); return; }
-    sessionStorage.setItem("pending_google_voter", JSON.stringify({ fullName: fullName.trim(), voterIds: ids }));
+    if (!fullName.trim() || !ids.length || !/^[6-9]\\d{9}$/.test(mobile.replace(/\\D/g, ""))) { setError("पूरा नाम, सही 10 अंकों का मोबाइल नंबर और कम से कम एक मतदाता पहचान संख्या भरें।"); return; }
+    sessionStorage.setItem("pending_google_voter", JSON.stringify({ fullName: fullName.trim(), voterIds: ids, phone: mobile.replace(/\\D/g, ""), consentToEventContact: contactConsent }));
     await startGoogleLogin();
   };
 
@@ -168,8 +172,10 @@ function Login() {
           <p className="text-sm text-muted-foreground">Google अकाउंट चुनकर मतदाता का नया अकाउंट बनाएँ। मतदाता पहचान संख्या की जाँच के बाद Admin इसे सक्रिय करेगा।</p>
           <input className={inputCls} required value={fullName} onChange={e => setFullName(e.target.value)} placeholder="पूरा नाम" autoComplete="name" />
           <label className="block text-sm font-medium">मतदाता पहचान संख्या <span className="font-normal text-muted-foreground">(परिवार के लिए कॉमा लगाकर कई संख्या)</span><input className={inputCls + " mt-1"} required value={voterIds} onChange={e => setVoterIds(e.target.value)} placeholder="जैसे ABC123, ABC124" /></label>
+          <label className="block text-sm font-medium">मोबाइल नंबर<input className={inputCls + " mt-1"} required type="tel" inputMode="numeric" maxLength={10} autoComplete="tel" value={mobile} onChange={e => setMobile(e.target.value.replace(/\\D/g, "").slice(0,10))} placeholder="10 अंकों का मोबाइल नंबर" /></label>
+          <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={contactConsent} onChange={e => setContactConsent(e.target.checked)} /><span>मैं इवेंट/कार्यक्रम के संबंध में इस मोबाइल नंबर पर संपर्क करने की सहमति देता/देती हूँ। सहमति न देने पर भी अकाउंट की जाँच हो सकती है, लेकिन मेरा नंबर कॉलर को नहीं दिखेगा।</span></label>
           {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-          <button type="submit" disabled={busy || !fullName.trim() || !voterIds.trim()} className={btnPrimary + " w-full"}>{busy ? "Google पर जा रहे हैं..." : "Google से रजिस्ट्रेशन करें"}</button>
+          <button type="submit" disabled={busy || !fullName.trim() || !voterIds.trim() || !/^[6-9]\\d{9}$/.test(mobile)} className={btnPrimary + " w-full"}>{busy ? "Google पर जा रहे हैं..." : "Google से रजिस्ट्रेशन करें"}</button>
         </form>
        ) : mode === "otp" ? (
         <div className="space-y-3">

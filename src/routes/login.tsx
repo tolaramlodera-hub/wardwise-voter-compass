@@ -14,6 +14,8 @@ function Login() {
   const [mode, setMode] = useState<"password" | "otp" | "signup">("otp");
   const [fullName, setFullName] = useState("");
   const [voterIds, setVoterIds] = useState("");
+  const [mobile, setMobile] = useState("");
+  const [contactConsent, setContactConsent] = useState(false);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [linkSent, setLinkSent] = useState(false);
@@ -55,46 +57,26 @@ function Login() {
       .select("role,is_active").eq("user_id", user.id).maybeSingle();
     if (readError) return { error: readError.message, pending: false };
     if (existing) return { error: "", pending: !existing.is_active };
-    if (user.user_metadata?.account_type !== "voter") return { error: "यह यूजर प्रोफाइल उपलब्ध नहीं है। एडमिन से संपर्क करें।", pending: false };
-    const name = String(user.user_metadata.full_name || "").trim();
-    const ids = Array.isArray(user.user_metadata.voter_ids) ? user.user_metadata.voter_ids.map(String) : [];
+    let pendingSignup: { fullName?: string; voterIds?: string[]; phone?: string; consentToEventContact?: boolean } | null = null;
+    try { pendingSignup = JSON.parse(sessionStorage.getItem("pending_google_voter") || "null"); } catch { pendingSignup = null; }
+    if (user.user_metadata?.account_type !== "voter" && !pendingSignup) return { error: "यह Google अकाउंट अभी किसी सक्रिय यूजर से जुड़ा नहीं है। नया अकाउंट बनाने के लिए नया अकाउंट विकल्प चुनें।", pending: false };
+    const name = String(user.user_metadata.full_name || pendingSignup?.fullName || "").trim();
+    const ids = Array.isArray(user.user_metadata.voter_ids) ? user.user_metadata.voter_ids.map(String) : (pendingSignup?.voterIds ?? []);
     if (!name || !ids.length) return { error: "रजिस्ट्रेशन में नाम या मतदाता पहचान संख्या नहीं मिली।", pending: false };
-    const { error: profileError } = await supabase.from("profiles").insert({ user_id: user.id, full_name: name, role: "voter", is_active: false });
-    if (profileError) return { error: profileError.message, pending: false };
-    const links: { user_id: string; voter_id: string; relation: string }[] = [];
-    for (const id of [...new Set(ids)]) {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-      const query = supabase.from("voters").select("id");
-      const { data: voter } = isUuid ? await query.eq("id", id).maybeSingle() : await query.eq("voter_id", id).maybeSingle();
-      if (!voter) return { error: "मतदाता पहचान संख्या " + id + " सूची में नहीं मिली। सही संख्या जाँचें।", pending: false };
-      links.push({ user_id: user.id, voter_id: voter.id, relation: links.length ? "family_member" : "self" });
-    }
-    const { error: linkError } = await supabase.from("voter_account_links").insert(links);
-    if (linkError) return { error: linkError.message.includes("duplicate") ? "इस मतदाता रिकॉर्ड का अकाउंट पहले से जुड़ा है। एडमिन से संपर्क करें।" : linkError.message, pending: false };
-    return { error: "", pending: true };
+    const phone = String(user.user_metadata.phone || pendingSignup?.phone || "").trim();
+    const consent = Boolean(pendingSignup?.consentToEventContact);
+    const { data: registration, error: registrationError } = await supabase.rpc("register_google_voter", { p_full_name: name, p_voter_ids: ids, p_phone: phone, p_consent_to_event_contact: consent });
+    if (registrationError) return { error: "Google रजिस्ट्रेशन पूरा नहीं हुआ: " + registrationError.message, pending: false };
+    sessionStorage.removeItem("pending_google_voter");
+    return { error: "", pending: registration?.status === "pending_admin_approval" };
   };
 
   const submitSignup = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setBusy(true); setError(""); setNotice("");
-    try {
-      const ids = voterIds.split(",").map((v) => v.trim()).filter(Boolean);
-      if (!fullName.trim() || !ids.length) { setError("पूरा नाम और कम से कम एक मतदाता पहचान संख्या भरें।"); return; }
-      const { data, error: signupError } = await getSupabaseBrowserClient().auth.signUp({
-        email: identifier.trim().toLowerCase(), password,
-        options: { data: { account_type: "voter", full_name: fullName.trim(), voter_ids: ids }, emailRedirectTo: window.location.origin + "/login" },
-      });
-      if (signupError) { setError(signupError.message); return; }
-      if (data.session && data.user) {
-        const result = await ensureVoterProfile(data.user);
-        await getSupabaseBrowserClient().auth.signOut();
-        if (result.error) { setError(result.error); return; }
-        setNotice("रजिस्ट्रेशन सफल। एडमिन द्वारा पहचान जाँचकर अकाउंट सक्रिय करने के बाद लॉगिन कर सकेंगे।");
-      } else {
-        setNotice("ईमेल सत्यापन लिंक भेजा गया है। लिंक खोलने के बाद आपका अकाउंट एडमिन की जाँच के लिए लंबित रहेगा।");
-      }
-    } catch { setError("रजिस्ट्रेशन पूरा नहीं हो सका। ईमेल और मतदाता पहचान संख्या जाँचें।"); }
-    finally { setBusy(false); }
+    const ids = voterIds.split(",").map((v) => v.trim()).filter(Boolean);
+    if (!fullName.trim() || !ids.length || !/^[6-9]\d{9}$/.test(mobile.replace(/\D/g, ""))) { setError("पूरा नाम, सही 10 अंकों का मोबाइल नंबर और कम से कम एक मतदाता पहचान संख्या भरें।"); return; }
+    sessionStorage.setItem("pending_google_voter", JSON.stringify({ fullName: fullName.trim(), voterIds: ids, phone: mobile.replace(/\D/g, ""), consentToEventContact: contactConsent }));
+    await startGoogleLogin();
   };
 
   const finishLogin = async (userId: string) => {
@@ -137,6 +119,8 @@ function Login() {
     }
   };
 
+  const startGoogleLogin = async () => { setBusy(true); setError(""); setNotice(""); try { const { error } = await getSupabaseBrowserClient().auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin + "/login" } }); if (error) setError("Google लॉगिन शुरू नहीं हो सका: " + error.message); } catch { setError("Google लॉगिन सेटअप उपलब्ध नहीं है।"); } finally { setBusy(false); } };
+
   const sendMagicLink = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true);
@@ -178,34 +162,27 @@ function Login() {
       </div>
 
       <div className="mb-5 grid grid-cols-3 gap-2 rounded-xl bg-muted p-1">
-        <button type="button" onClick={() => { setMode("otp"); setError(""); setNotice(""); }} className={`rounded-lg px-2 py-2 text-sm font-semibold ${mode === "otp" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>बिना पासवर्ड</button>
+        <button type="button" onClick={() => { setMode("otp"); setError(""); setNotice(""); }} className={`rounded-lg px-2 py-2 text-sm font-semibold ${mode === "otp" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>Google लॉगिन</button>
         <button type="button" onClick={() => { setMode("password"); setError(""); setNotice(""); }} className={`rounded-lg px-2 py-2 text-sm font-semibold ${mode === "password" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>पासवर्ड</button>
         <button type="button" onClick={() => { setMode("signup"); setError(""); setNotice(""); }} className={`rounded-lg px-2 py-2 text-sm font-semibold ${mode === "signup" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>नया अकाउंट</button>
       </div>
 
       {mode === "signup" ? (
         <form onSubmit={submitSignup} className="space-y-3">
-          <p className="text-sm text-muted-foreground">मतदाता सूची में दर्ज पहचान संख्या से व्यक्तिगत या परिवार का अकाउंट बनाएँ। एडमिन सत्यापन के बाद अकाउंट सक्रिय होगा।</p>
+          <p className="text-sm text-muted-foreground">Google अकाउंट चुनकर मतदाता का नया अकाउंट बनाएँ। मतदाता पहचान संख्या की जाँच के बाद Admin इसे सक्रिय करेगा।</p>
           <input className={inputCls} required value={fullName} onChange={e => setFullName(e.target.value)} placeholder="पूरा नाम" autoComplete="name" />
-          <input className={inputCls} type="email" required value={identifier} onChange={e => setIdentifier(e.target.value)} placeholder="ईमेल पता" autoComplete="email" />
-          <input className={inputCls} type="password" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} placeholder="पासवर्ड (कम से कम 8 अक्षर)" autoComplete="new-password" />
           <label className="block text-sm font-medium">मतदाता पहचान संख्या <span className="font-normal text-muted-foreground">(परिवार के लिए कॉमा लगाकर कई संख्या)</span><input className={inputCls + " mt-1"} required value={voterIds} onChange={e => setVoterIds(e.target.value)} placeholder="जैसे ABC123, ABC124" /></label>
+          <label className="block text-sm font-medium">मोबाइल नंबर<input className={inputCls + " mt-1"} required type="tel" inputMode="numeric" maxLength={10} autoComplete="tel" value={mobile} onChange={e => setMobile(e.target.value.replace(/\D/g, "").slice(0,10))} placeholder="10 अंकों का मोबाइल नंबर" /></label>
+          <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={contactConsent} onChange={e => setContactConsent(e.target.checked)} /><span>मैं इवेंट/कार्यक्रम के संबंध में इस मोबाइल नंबर पर संपर्क करने की सहमति देता/देती हूँ। सहमति न देने पर भी अकाउंट की जाँच हो सकती है, लेकिन मेरा नंबर कॉलर को नहीं दिखेगा।</span></label>
           {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-          {notice && <p role="status" className="rounded-lg bg-primary/10 p-3 text-sm text-primary">{notice}</p>}
-          <button type="submit" disabled={busy || !identifier.trim() || !password || !fullName.trim() || !voterIds.trim()} className={btnPrimary + " w-full"}>{busy ? "अकाउंट बनाया जा रहा है..." : "रजिस्ट्रेशन करें"}</button>
+          <button type="submit" disabled={busy || !fullName.trim() || !voterIds.trim() || !/^[6-9]\d{9}$/.test(mobile)} className={btnPrimary + " w-full"}>{busy ? "Google पर जा रहे हैं..." : "Google से रजिस्ट्रेशन करें"}</button>
         </form>
-      ) : mode === "otp" ? (
-        <form onSubmit={sendMagicLink} className="space-y-3">
-          <p className="text-sm text-muted-foreground">रजिस्टर्ड ईमेल पर आए सुरक्षित लॉगिन लिंक से प्रवेश करें।</p>
-          <label className="block text-sm font-medium">रजिस्टर्ड ईमेल
-            <div className="relative mt-1"><Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input className={inputCls + " pl-9"} type="email" required value={identifier} onChange={e => setIdentifier(e.target.value)} placeholder="name@gmail.com" autoComplete="email" disabled={linkSent} /></div>
-          </label>
-
+       ) : mode === "otp" ? (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">फोन में पहले से लॉगिन Google अकाउंट चुनकर सुरक्षित प्रवेश करें।</p>
           {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-          {notice && <p role="status" className="rounded-lg bg-primary/10 p-3 text-sm text-primary">{notice}</p>}
-          <button type="submit" disabled={busy || !identifier.trim() || linkSent} className={btnPrimary + " w-full"}>{busy ? "कृपया प्रतीक्षा करें..." : "ईमेल पर लॉगिन लिंक भेजें"}</button>
-          {linkSent && <button type="button" onClick={() => { setLinkSent(false); setError(""); setNotice(""); }} className="w-full text-sm font-medium text-primary underline">दूसरा ईमेल डालें</button>}
-        </form>
+          <button type="button" onClick={() => void startGoogleLogin()} disabled={busy} className={btnPrimary + " w-full"}>{busy ? "Google पर जा रहे हैं..." : "Google से जारी रखें"}</button>
+        </div>
       ) : (
         <form onSubmit={submitPassword} className="space-y-3">
           <label className="block text-sm font-medium">ईमेल / लॉगिन ID
@@ -219,7 +196,7 @@ function Login() {
           <div className="text-center"><Link to="/reset-password" className="text-sm font-medium text-primary underline-offset-4 hover:underline">पासवर्ड भूल गए?</Link></div>
         </form>
       )}
-      <p className="mt-4 text-center text-xs text-muted-foreground">नया मतदाता अकाउंट ईमेल सत्यापन और एडमिन की स्वीकृति के बाद सक्रिय होगा।</p>
+      <p className="mt-4 text-center text-xs text-muted-foreground">नया मतदाता अकाउंट Google लॉगिन और Admin की स्वीकृति के बाद सक्रिय होगा।</p>
     </div>
   </div>;
 }

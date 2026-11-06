@@ -9,9 +9,10 @@ type EventRow = { id: string; name: string; purpose: string; event_at: string; p
 type Household = { id: string; ward_id: string; house_number: string; household_label: string; voter_ids: string[]; status: string };
 type Profile = { user_id: string; full_name: string; role: string };
 type Contact = { voter_id: string; phone: string };
-type SavedContact = { voter_id: string; phone: string; consent_to_event_contact: boolean };
 type Voter = { id: string; voter_id: string | null; full_name: string; relative_name: string | null; house_number: string | null; ward_id: string };
-type PendingVoterAccount = { user_id: string; full_name: string; voter_account_links: { voters: { full_name: string; voter_id: string | null; house_number: string | null } | null }[] };
+type WardOption = { id: string; ward_number: number; name: string; is_active: boolean };
+type PendingVoterAccount = { user_id: string; full_name: string; voter_account_links: { voters: { id: string; full_name: string; voter_id: string | null; house_number: string | null } | null }[] };
+type PendingContactSubmission = { user_id: string; phone: string; consent_to_event_contact: boolean; submitted_at: string };
 const eventStatusLabels: Record<string, string> = { pending: "अनुमोदन लंबित", approved: "स्वीकृत", rejected: "अस्वीकृत", closed: "बंद" };
 
 export const Route = createFileRoute("/events")({ head: () => ({ meta: [{ title: "इवेंट एवं संपर्क प्रबंधन" }] }), component: Events });
@@ -26,14 +27,16 @@ function Events() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [memberEventIds, setMemberEventIds] = useState<string[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [savedContacts, setSavedContacts] = useState<SavedContact[]>([]);
   const [voterDetails, setVoterDetails] = useState<Voter[]>([]);
   const [allVoters, setAllVoters] = useState<Voter[]>([]);
+  const [accountWards, setAccountWards] = useState<WardOption[]>([]);
+  const [callingWardId, setCallingWardId] = useState("all");
+  const [callingWardSelection, setCallingWardSelection] = useState<string[]>([]);
+  const [pendingLinkWard, setPendingLinkWard] = useState<Record<string, string>>({});
   const [pendingVoterAccounts, setPendingVoterAccounts] = useState<PendingVoterAccount[]>([]);
-  const [contactSearch, setContactSearch] = useState("");
-  const [contactVoterId, setContactVoterId] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-  const [contactConsent, setContactConsent] = useState(false);
+  const [pendingContactSubmissions, setPendingContactSubmissions] = useState<PendingContactSubmission[]>([]);
+  const [pendingLinkSearch, setPendingLinkSearch] = useState<Record<string, string>>({});
+  const [pendingLinkSelection, setPendingLinkSelection] = useState<Record<string, string>>({});
   const [splitHouse, setSplitHouse] = useState<Household | null>(null);
   const [splitSelected, setSplitSelected] = useState<string[]>([]);
   const [splitLabel, setSplitLabel] = useState("");
@@ -57,17 +60,21 @@ function Events() {
     const { data, error } = await supabase.from("community_events").select("*").order("created_at", { ascending: false });
     if (error) { toast.error("इवेंट सूची लोड नहीं हुई: " + error.message); return; }
     setEvents((data ?? []) as EventRow[]);
-    const { data: people } = await supabase.from("profiles").select("user_id,full_name,role").eq("is_active", true).order("full_name");
+    const { data: people, error: peopleError } = await supabase.rpc("list_event_callers");
+    if (peopleError) toast.error("कॉलर सूची लोड नहीं हुई: " + peopleError.message);
     setProfiles((people ?? []) as Profile[]);
+    const { data: visibleWardRows, error: wardLoadError } = await supabase.from("wards").select("id,ward_number,name,is_active").eq("is_active", true).order("ward_number");
+    if (wardLoadError) toast.error("वार्ड सूची लोड नहीं हुई: " + wardLoadError.message);
+    setAccountWards((visibleWardRows ?? []) as WardOption[]);
     if (p?.role === "admin") {
-      const [{ data: voters }, { data: savedContacts }, { data: pendingAccounts }] = await Promise.all([
+      const [{ data: voters }, { data: pendingAccounts }, { data: pendingContacts }] = await Promise.all([
         supabase.from("voters").select("id,voter_id,full_name,relative_name,house_number,ward_id").order("full_name").limit(2500),
-        supabase.from("voter_contacts").select("voter_id,phone,consent_to_event_contact"),
-        supabase.from("profiles").select("user_id,full_name,voter_account_links(voters(full_name,voter_id,house_number))").eq("role", "voter").eq("is_active", false),
+        supabase.from("profiles").select("user_id,full_name,voter_account_links(voters(id,full_name,voter_id,house_number))").eq("role", "voter").eq("is_active", false),
+        supabase.from("pending_voter_contact_submissions").select("user_id,phone,consent_to_event_contact,submitted_at"),
       ]);
       setAllVoters((voters ?? []) as Voter[]);
-      setSavedContacts((savedContacts ?? []) as SavedContact[]);
       setPendingVoterAccounts((pendingAccounts ?? []) as unknown as PendingVoterAccount[]);
+      setPendingContactSubmissions((pendingContacts ?? []) as PendingContactSubmission[]);
     }
   };
 
@@ -78,12 +85,16 @@ function Events() {
     setHouseholds(rows);
     const ids = [...new Set(rows.flatMap((h) => h.voter_ids))];
     if (!ids.length) { setContacts([]); setVoterDetails([]); setClaims({}); setCallRecords([]); return; }
-    const [{ data: phoneRows }, { data: claimRows }, { data: voterRows }, { data: recordRows }] = await Promise.all([
-      supabase.from("voter_contacts").select("voter_id,phone").in("voter_id", ids).eq("consent_to_event_contact", true),
+    const [{ data: phoneRows, error: phoneError }, { data: claimRows, error: claimError }, { data: voterRows, error: voterError }, { data: recordRows, error: recordError }] = await Promise.all([
+      supabase.rpc("get_event_consented_contacts", { p_event_id: eventId }),
       supabase.from("event_call_claims").select("household_id,caller_id,expires_at").in("household_id", rows.map((h) => h.id)).gt("expires_at", new Date().toISOString()),
-      supabase.from("voters").select("id,voter_id,full_name,relative_name,house_number,ward_id").in("id", ids),
+      supabase.rpc("get_event_voter_details", { p_event_id: eventId }),
       supabase.from("event_calling_records").select("caller_id,outcome,created_at,household_id").in("household_id", rows.map((h) => h.id)).order("created_at", { ascending: false }),
     ]);
+    if (voterError) toast.error("मतदाता विवरण लोड नहीं हुआ: " + voterError.message);
+    if (phoneError) toast.error("सहमति वाले मोबाइल नंबर लोड नहीं हुए: " + phoneError.message);
+    if (claimError) toast.error("कॉल स्थिति लोड नहीं हुई: " + claimError.message);
+    if (recordError) toast.error("कॉल इतिहास लोड नहीं हुआ: " + recordError.message);
     setContacts((phoneRows ?? []) as Contact[]);
     setVoterDetails((voterRows ?? []) as Voter[]);
     setCallRecords((recordRows ?? []) as typeof callRecords);
@@ -108,13 +119,31 @@ function Events() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     setBusy(true);
-    const { error } = await supabase.from("community_events").insert({
+    const { data: createdEvent, error } = await supabase.from("community_events").insert({
       name: String(f.get("name")), purpose: String(f.get("purpose")), event_at: new Date(String(f.get("event_at"))).toISOString(),
       place: String(f.get("place")), details: String(f.get("details") || ""), created_by: userId,
-    });
+      organizer_id: userId, status: "approved",
+    }).select("id").single();
+    if (error || !createdEvent) {
+      setBusy(false);
+      toast.error("इवेंट नहीं बना: " + (error?.message ?? "इवेंट आईडी नहीं मिली"));
+      return;
+    }
+    const { error: memberError } = await supabase.from("event_members").upsert(
+      { event_id: createdEvent.id, user_id: userId, member_role: "organizer", is_active: true, appointed_by: userId },
+      { onConflict: "event_id,user_id" },
+    );
+    const { data: preparedCount, error: prepareError } = await supabase.rpc("prepare_event_households", { p_event_id: createdEvent.id });
     setBusy(false);
-    if (error) toast.error("इवेंट अनुरोध नहीं बना: " + error.message);
-    else { toast.success("इवेंट अनुमोदन के लिए भेज दिया गया"); setCreateOpen(false); await load(); }
+    if (memberError || prepareError) {
+      toast.error("इवेंट बन गया, लेकिन टीम/घर सूची तैयार करने में समस्या आई: " + (memberError?.message ?? prepareError?.message));
+    } else {
+      toast.success("इवेंट तुरंत शुरू हो गया। " + Number(preparedCount ?? 0) + " घरों की कॉलिंग सूची अपने-आप तैयार हुई।");
+    }
+    setCreateOpen(false);
+    setSelected(createdEvent.id);
+    await load();
+    await loadHouseholds(createdEvent.id);
   };
 
   const reviewEvent = async (ev: EventRow, status: "approved" | "rejected") => {
@@ -135,25 +164,6 @@ function Events() {
       toast.success(status === "approved" ? "इवेंट स्वीकृत" : "इवेंट अस्वीकृत");
       await load();
     }
-  };
-
-  const generateHouseholds = async (ev: EventRow) => {
-    setBusy(true);
-    const { data: voters, error } = await supabase.from("voters").select("id,ward_id,house_number").not("house_number", "is", null).order("house_number");
-    if (error) { setBusy(false); toast.error("मतदाता सूची नहीं मिली: " + error.message); return; }
-    const groups = new Map<string, { ward_id: string; house_number: string; voter_ids: string[] }>();
-    for (const v of voters ?? []) {
-      const house = String(v.house_number ?? "").trim();
-      if (!house) continue;
-      const key = v.ward_id + "::" + house;
-      const group = groups.get(key) ?? { ward_id: v.ward_id, house_number: house, voter_ids: [] };
-      group.voter_ids.push(v.id); groups.set(key, group);
-    }
-    const rows = [...groups.values()].map((g) => ({ event_id: ev.id, ...g, household_label: "" }));
-    const { error: saveError } = rows.length ? await supabase.from("event_households").upsert(rows, { onConflict: "event_id,ward_id,house_number,household_label", ignoreDuplicates: true }) : { error: null };
-    setBusy(false);
-    if (saveError) toast.error("घर सूची नहीं बनी: " + saveError.message);
-    else { toast.success(rows.length + " घरों की सूची तैयार हुई। एक ही मकान में अलग परिवार हों तो सूची की जाँच/विभाजन Admin से करवाएँ।"); setSelected(ev.id); await loadHouseholds(ev.id); }
   };
 
   const appointMember = async () => {
@@ -188,30 +198,29 @@ function Events() {
     else { toast.success(outcome === "contacted" ? "संपर्क पूरा — सभी सदस्यों की सूची से हटाया गया" : "कॉल परिणाम सेव हुआ"); setClaimed(null); setNotes(""); await loadHouseholds(selected); }
   };
 
-  const approveVoterAccount = async (account: PendingVoterAccount) => {
-    if (!account.voter_account_links?.length) { toast.error("इस अकाउंट से कोई मतदाता रिकॉर्ड जुड़ा नहीं है"); return; }
+  const linkPendingVoter = async (account: PendingVoterAccount) => {
+    const voterId = pendingLinkSelection[account.user_id];
+    if (!voterId) { toast.error("पहले सही मतदाता रिकॉर्ड चुनें"); return; }
     setBusy(true);
-    const { error } = await supabase.functions.invoke("admin-user-management", { body: { action: "toggle", user_id: account.user_id, is_active: true } });
+    const { error } = await supabase.rpc("admin_link_pending_voter", { p_user_id: account.user_id, p_voter_record_id: voterId });
     setBusy(false);
-    if (error) toast.error("अकाउंट सक्रिय नहीं हुआ: " + error.message);
-    else { toast.success("मतदाता अकाउंट सक्रिय कर दिया गया"); await load(); }
+    if (error) toast.error("मतदाता रिकॉर्ड लिंक नहीं हुआ: " + error.message);
+    else { toast.success("मतदाता रिकॉर्ड सफलतापूर्वक लिंक हो गया"); setPendingLinkSelection((old) => ({ ...old, [account.user_id]: "" })); await load(); }
   };
 
-  const saveContact = async () => {
-    if (!contactVoterId || !contactPhone.trim()) { toast.error("मतदाता और मोबाइल नंबर भरें"); return; }
-    setBusy(true);
-    const { error } = await supabase.from("voter_contacts").upsert({
-      voter_id: contactVoterId, phone: contactPhone.trim(), consent_to_event_contact: contactConsent,
-      consent_recorded_at: contactConsent ? new Date().toISOString() : null, updated_by: userId, updated_at: new Date().toISOString(),
-    }, { onConflict: "voter_id" });
-    setBusy(false);
-    if (error) toast.error("मोबाइल नंबर सेव नहीं हुआ: " + error.message);
-    else {
-      setSavedContacts((old) => [...old.filter((x) => x.voter_id !== contactVoterId), { voter_id: contactVoterId, phone: contactPhone.trim(), consent_to_event_contact: contactConsent }]);
-      toast.success("मोबाइल नंबर और सहमति सेव हुई");
-      setContactVoterId(""); setContactPhone(""); setContactConsent(false);
-      if (selected) await loadHouseholds(selected);
+  const approveVoterAccount = async (account: PendingVoterAccount) => {
+    if (!account.voter_account_links?.length || account.voter_account_links.some((link) => !link.voters)) {
+      toast.error("पहले इस अकाउंट से सही मतदाता रिकॉर्ड लिंक करें"); return;
     }
+    const submission = pendingContactSubmissions.find((item) => item.user_id === account.user_id);
+    if (!submission) { toast.error("मतदाता का मोबाइल नंबर रजिस्ट्रेशन में नहीं मिला। उससे दोबारा जानकारी भरवाएँ।"); return; }
+    setBusy(true);
+    const { error: contactError } = await supabase.rpc("admin_save_pending_voter_contact", { p_user_id: account.user_id });
+    if (contactError) { setBusy(false); toast.error("मोबाइल नंबर मतदाता रिकॉर्ड में सेव नहीं हुआ: " + contactError.message); return; }
+    const { error } = await supabase.functions.invoke("admin-user-management", { body: { action: "toggle", user_id: account.user_id, is_active: true } });
+    setBusy(false);
+    if (error) toast.error("मोबाइल नंबर सेव हुआ, लेकिन अकाउंट सक्रिय नहीं हुआ: " + error.message);
+    else { toast.success("मोबाइल नंबर और सहमति जाँचकर मतदाता अकाउंट सक्रिय कर दिया गया"); await load(); }
   };
 
   const splitFamily = async () => {
@@ -253,9 +262,10 @@ function Events() {
     else { toast.success("इवेंट बंद कर दिया गया"); await load(); }
   };
 
+  const callingHouseholds = households.filter((h) => callingWardSelection.length === 0 || callingWardSelection.includes(h.ward_id));
   const exportReport = () => {
     const rows = [["घर नंबर","परिवार","स्थिति","मतदाता संख्या","कॉल करने वाला","परिणाम","समय"]];
-    for (const h of households) {
+    for (const h of callingHouseholds) {
       const history = callRecords.filter((r) => r.household_id === h.id);
       if (!history.length) rows.push([h.house_number,h.household_label,h.status,String(h.voter_ids.length),"","",""]);
       else for (const r of history) rows.push([h.house_number,h.household_label,h.status,String(h.voter_ids.length),profiles.find((p) => p.user_id === r.caller_id)?.full_name ?? r.caller_id,r.outcome,new Date(r.created_at).toLocaleString("hi-IN")]);
@@ -275,8 +285,35 @@ function Events() {
       <p className="text-sm text-muted-foreground">इवेंट अनुमोदन, टीम नियुक्ति और साझा लाइव कॉलिंग सूची</p>
       <button className={btnPrimary} onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> नया इवेंट अनुरोध</button>
     </div>
-    {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-3 font-bold">मतदाता मोबाइल नंबर और संपर्क सहमति</h2><div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"><input className={inputCls} value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} placeholder="मतदाता नाम / पहचान संख्या खोजें"/><select className={inputCls} value={contactVoterId} onChange={(e) => { setContactVoterId(e.target.value); const found = savedContacts.find((x) => x.voter_id === e.target.value); setContactPhone(found?.phone ?? ""); setContactConsent(Boolean(found?.consent_to_event_contact)); }}><option value="">मतदाता चुनें</option>{allVoters.filter((v) => !contactSearch || (v.full_name + " " + (v.voter_id ?? "")).toLowerCase().includes(contactSearch.toLowerCase())).slice(0,100).map((v) => <option key={v.id} value={v.id}>{v.full_name} · {v.voter_id ?? "ID नहीं"} · मकान {v.house_number ?? "-"}</option>)}</select><input className={inputCls} value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="मोबाइल नंबर" type="tel"/><button className={btnPrimary} disabled={busy || !contactVoterId} onClick={() => void saveContact()}>सेव करें</button></div><label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" checked={contactConsent} onChange={(e) => setContactConsent(e.target.checked)} className="mt-1"/>मतदाता ने इवेंट के संबंध में संपर्क करने की स्पष्ट सहमति दी है। बिना सहमति नंबर कॉलर को नहीं दिखेगा।</label></Card>}
-    {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-2 font-bold">नए मतदाता अकाउंट की जाँच</h2>{pendingVoterAccounts.length === 0 ? <p className="text-sm text-muted-foreground">कोई नया अकाउंट स्वीकृति के लिए लंबित नहीं है।</p> : <div className="space-y-2">{pendingVoterAccounts.map((account) => <div key={account.user_id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><b>{account.full_name}</b><div className="mt-1 text-xs text-muted-foreground">लिंक रिकॉर्ड: {account.voter_account_links?.map((link) => link.voters ? `${link.voters.full_name} (${link.voters.voter_id ?? "ID नहीं"}) · मकान ${link.voters.house_number ?? "-"}` : "रिकॉर्ड नहीं मिला").join(" | ") || "रिकॉर्ड उपलब्ध नहीं"}</div></div><button className={btnPrimary} disabled={busy || !account.voter_account_links?.length} onClick={() => void approveVoterAccount(account)}>जाँचकर सक्रिय करें</button></div>)}</div>}</Card>}
+    {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-2 font-bold">नए मतदाता अकाउंट की जाँच</h2>{pendingVoterAccounts.length === 0 ? <p className="text-sm text-muted-foreground">कोई नया अकाउंट स्वीकृति के लिए लंबित नहीं है।</p> : <div className="space-y-3">{pendingVoterAccounts.map((account) => {
+      const links = account.voter_account_links ?? [];
+      const linked = links.filter((link) => link.voters);
+      const searchText = (pendingLinkSearch[account.user_id] ?? "").trim().toLowerCase();
+      const selectedWard = pendingLinkWard[account.user_id] ?? "";
+      const candidates = allVoters.filter((v) => (!selectedWard || v.ward_id === selectedWard) && (!searchText || [v.full_name, v.voter_id ?? "", v.house_number ?? ""].some((value) => value.toLowerCase().includes(searchText)))).slice(0, 100);
+      return <div key={account.user_id} className="rounded-lg border p-3">
+        <div className="font-semibold">{account.full_name}</div>
+        <div className="mt-1 text-sm">मोबाइल: {pendingContactSubmissions.find((item) => item.user_id === account.user_id)?.phone ?? "नंबर उपलब्ध नहीं"}</div>
+        <div className="text-sm text-muted-foreground">इवेंट संपर्क सहमति: {pendingContactSubmissions.find((item) => item.user_id === account.user_id)?.consent_to_event_contact ? "हाँ" : "नहीं"}</div>
+        <div className="mt-1 text-sm text-muted-foreground">लिंक रिकॉर्ड: {linked.map((link) => link.voters ? `${link.voters.full_name} (${link.voters.voter_id ?? "ID नहीं"}) · मकान ${link.voters.house_number ?? "-"}` : "").filter(Boolean).join(" | ") || "रिकॉर्ड उपलब्ध नहीं"}</div>
+        {!linked.length && <div className="mt-3 grid gap-3">
+          <div>
+            <div className="mb-2 text-sm font-semibold">पहले वार्ड चुनें</div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className={(!selectedWard ? btnPrimary : btnOutline)} onClick={() => { setPendingLinkWard((old) => ({ ...old, [account.user_id]: "" })); setPendingLinkSelection((old) => ({ ...old, [account.user_id]: "" })); }}>सभी वार्ड</button>
+              {accountWards.map((ward) => <button type="button" key={ward.id} className={(selectedWard === ward.id ? btnPrimary : btnOutline)} onClick={() => { setPendingLinkWard((old) => ({ ...old, [account.user_id]: ward.id })); setPendingLinkSelection((old) => ({ ...old, [account.user_id]: "" })); }}>{ward.name || `वार्ड ${ward.ward_number}`}</button>)}
+            </div>
+          </div>
+          <input className={inputCls} value={pendingLinkSearch[account.user_id] ?? ""} onChange={(e) => setPendingLinkSearch((old) => ({ ...old, [account.user_id]: e.target.value }))} placeholder="चुने हुए वार्ड में नाम, मकान या पहचान संख्या खोजें"/>
+          <select className={inputCls} value={pendingLinkSelection[account.user_id] ?? ""} onChange={(e) => setPendingLinkSelection((old) => ({ ...old, [account.user_id]: e.target.value }))}>
+            <option value="">सही मतदाता रिकॉर्ड चुनें ({candidates.length} रिकॉर्ड)</option>
+            {candidates.map((v) => <option key={v.id} value={v.id}>{v.full_name} · {v.voter_id ?? "ID नहीं"} · मकान {v.house_number ?? "-"}</option>)}
+          </select>
+          <button className={btnOutline} disabled={busy || !pendingLinkSelection[account.user_id]} onClick={() => void linkPendingVoter(account)}>मतदाता रिकॉर्ड लिंक करें</button>
+        </div>}
+        <button className={btnPrimary + " mt-3"} disabled={busy || !links.length || links.some((link) => !link.voters)} onClick={() => void approveVoterAccount(account)}>जाँचकर सक्रिय करें</button>
+      </div>;
+    })}</div>}</Card>}
     <div className="grid gap-4 lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.5fr)]">
       <Card className="p-4">
         <h2 className="mb-3 flex items-center gap-2 font-bold"><CalendarDays className="h-5 w-5" /> इवेंट सूची</h2>
@@ -295,14 +332,13 @@ function Events() {
               {role === "admin" && selectedEvent.status === "pending" && <div className="flex gap-2"><button disabled={busy} className={btnPrimary} onClick={() => void reviewEvent(selectedEvent,"approved")}><Check className="h-4 w-4"/>स्वीकृत</button><button disabled={busy} className={btnOutline} onClick={() => void reviewEvent(selectedEvent,"rejected")}>अस्वीकृत</button></div>}
             </div>
             {selectedEvent.status === "approved" && (role === "admin" || selectedEvent.organizer_id === userId) && <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
-              {role === "admin" && <button disabled={busy} className={btnOutline} onClick={() => void generateHouseholds(selectedEvent)}><RefreshCw className="h-4 w-4"/>मतदाता सूची से घर तैयार करें</button>}
               <select className={inputCls + " max-w-xs"} value={teamUser} onChange={(e) => setTeamUser(e.target.value)}><option value="">कॉलर चुनें</option>{profiles.filter((p) => p.user_id !== userId).map((p) => <option key={p.user_id} value={p.user_id}>{p.full_name} ({p.role})</option>)}</select>
               <button disabled={busy || !teamUser} className={btnPrimary} onClick={() => void appointMember()}><Users className="h-4 w-4"/>टीम में जोड़ें</button>
             </div>}
           </Card>
           {selectedEvent.status === "approved" && <Card className="p-4">
-            <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">कुल घर</div><b>{households.length}</b></div><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">लंबित</div><b>{households.filter((h) => h.status === "pending").length}</b></div><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">दोबारा कॉल</div><b>{households.filter((h) => h.status === "retry").length}</b></div><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">पूरे</div><b>{households.filter((h) => h.status === "completed").length}</b></div></div>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold">साझा कॉलिंग सूची</h3><div className="flex gap-2"><button className={btnOutline} onClick={exportReport}>Excel के लिए CSV रिपोर्ट</button><select className="h-9 rounded-lg border bg-card px-2 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="pending">बाकी घर</option><option value="retry">दोबारा कॉल</option><option value="completed">पूरे</option><option value="needs_correction">नंबर सुधार</option></select><button className={btnOutline} onClick={() => void loadHouseholds(selected)}><RefreshCw className="h-4 w-4"/>रीफ्रेश</button></div></div>
+            <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">कुल घर</div><b>{callingHouseholds.length}</b></div><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">लंबित</div><b>{callingHouseholds.filter((h) => h.status === "pending").length}</b></div><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">दोबारा कॉल</div><b>{callingHouseholds.filter((h) => h.status === "retry").length}</b></div><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">पूरे</div><b>{callingHouseholds.filter((h) => h.status === "completed").length}</b></div></div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold">साझा कॉलिंग सूची</h3><div className="flex flex-wrap gap-2"><div className="flex flex-wrap gap-2" aria-label="कॉलिंग सूची के वार्ड चुनें"><button type="button" className={callingWardSelection.length === 0 ? btnPrimary : btnOutline} onClick={() => setCallingWardSelection([])}>सभी वार्ड</button>{accountWards.map((w) => <button type="button" key={w.id} className={callingWardSelection.includes(w.id) ? btnPrimary : btnOutline} onClick={() => setCallingWardSelection((old) => old.includes(w.id) ? old.filter((id) => id !== w.id) : [...old, w.id])}>वार्ड {w.ward_number}</button>)}</div><button className={btnOutline} onClick={exportReport}>Excel के लिए CSV रिपोर्ट</button><select className="h-9 rounded-lg border bg-card px-2 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="pending">बाकी घर</option><option value="retry">दोबारा कॉल</option><option value="completed">पूरे</option><option value="needs_correction">नंबर सुधार</option></select><button className={btnOutline} onClick={() => void loadHouseholds(selected)}><RefreshCw className="h-4 w-4"/>रीफ्रेश</button></div></div>
             {claimed ? <div className="rounded-xl border border-primary p-4">
               <div className="mb-2 font-bold">घर नं. {claimed.house_number} {claimed.household_label && "· " + claimed.household_label} — कॉल जारी</div>
               <div className="mb-3 space-y-2">{claimed.voter_ids.map((id) => {
@@ -312,11 +348,11 @@ function Events() {
               <textarea className={inputCls + " min-h-20 py-2"} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="कॉल नोट (वैकल्पिक)" />
               <div className="mt-3 flex flex-wrap gap-2">{([["contacted","बात हो गई"],["no_answer","फोन नहीं उठा"],["busy","व्यस्त"],["call_later","बाद में कॉल"],["invalid_number","गलत नंबर"]] as const).map(([v,l]) => <button key={v} disabled={busy} className={v==="contacted" ? btnPrimary : btnOutline} onClick={() => void submitCall(v)}>{l}</button>)}</div>
             </div> : <div className="max-h-[560px] space-y-2 overflow-y-auto">
-              {households.filter((h) => h.status === filter).map((h) => <div key={h.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
-                <div><div className="font-semibold">घर नं. {h.house_number} {h.household_label && "· " + h.household_label}</div><div className="text-xs text-muted-foreground">{h.voter_ids.map((id) => voterDetails.find((v) => v.id === id)?.full_name ?? "मतदाता").join(", ")} · {h.voter_ids.length} सदस्य</div><div className="text-xs text-muted-foreground">{h.status === "retry" ? "दोबारा कॉल" : h.status === "completed" ? "संपर्क पूरा" : h.status === "needs_correction" ? "नंबर सुधार" : "लंबित"}</div></div>
+              {callingHouseholds.filter((h) => h.status === filter).map((h) => <div key={h.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
+                <div><div className="font-semibold">वार्ड {accountWards.find((w) => w.id === h.ward_id)?.ward_number ?? "-"} · घर नं. {h.house_number} {h.household_label && "· " + h.household_label}</div><div className="text-xs text-muted-foreground">{h.voter_ids.map((id) => voterDetails.find((v) => v.id === id)?.full_name ?? "मतदाता").join(", ")} · {h.voter_ids.length} सदस्य</div><div className="text-xs text-muted-foreground">{h.status === "retry" ? "दोबारा कॉल" : h.status === "completed" ? "संपर्क पूरा" : h.status === "needs_correction" ? "नंबर सुधार" : "लंबित"}</div></div>
                 {h.status === "pending" || h.status === "retry" ? claims[h.id] ? <span className="text-xs text-warning">दूसरा सदस्य कॉल कर रहा है</span> : <button disabled={busy} className={btnPrimary} onClick={() => void claimHouse(h)}><Phone className="h-4 w-4"/>चुनें और कॉल करें</button> : null}{role === "admin" && <div className="flex flex-wrap gap-1">{claims[h.id] && <button disabled={busy} className={btnOutline} onClick={() => void releaseClaim(h.id)}>लॉक हटाएँ</button>}<button className={btnOutline} onClick={() => { setSplitHouse(h); setSplitSelected([]); }}>परिवार अलग करें</button><button className={btnOutline} onClick={() => void correctHousehold(h,"pending")}>पेंडिंग करें</button><button className={btnOutline} onClick={() => void correctHousehold(h,"completed")}>पूर्ण करें</button></div>}
               </div>)}
-              {households.filter((h) => h.status === filter).length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">इस श्रेणी में घर नहीं हैं।</p>}
+              {callingHouseholds.filter((h) => h.status === filter).length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">इस श्रेणी में घर नहीं हैं।</p>}
             </div>}
           </Card>}
           {role === "admin" && splitHouse && <Card className="p-4"><h3 className="font-bold">मकान नं. {splitHouse.house_number} में दूसरा परिवार अलग करें</h3><p className="my-2 text-xs text-muted-foreground">अलग परिवार के सदस्य चुनें। बाकी सदस्य पहले परिवार में रहेंगे।</p><input className={inputCls} value={splitLabel} onChange={(e) => setSplitLabel(e.target.value)} placeholder="परिवार का नाम / पहचान"/><div className="my-3 max-h-52 space-y-2 overflow-y-auto">{splitHouse.voter_ids.map((id) => { const v = voterDetails.find((x) => x.id === id); return <label key={id} className="flex items-center gap-2 rounded border p-2 text-sm"><input type="checkbox" checked={splitSelected.includes(id)} onChange={(e) => setSplitSelected((old) => e.target.checked ? [...old,id] : old.filter((x) => x !== id))}/>{v?.full_name ?? "मतदाता"} · {v?.voter_id ?? id}</label>; })}</div><div className="flex justify-end gap-2"><button className={btnOutline} onClick={() => setSplitHouse(null)}>रद्द</button><button disabled={busy || !splitSelected.length || !splitLabel.trim()} className={btnPrimary} onClick={() => void splitFamily()}>परिवार अलग सेव करें</button></div></Card>}

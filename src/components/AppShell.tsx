@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { LayoutDashboard, Map, Users, Vote, CheckCircle2, Clock, BarChart3, UserCog, ScrollText, LogOut, ShieldCheck, LoaderCircle, Trash2, ListChecks } from "lucide-react";
+import { LayoutDashboard, Map, Users, Vote, CheckCircle2, Clock, BarChart3, UserCog, ScrollText, LogOut, ShieldCheck, LoaderCircle, Trash2, ListChecks, CalendarDays } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const nav = [
@@ -11,6 +11,7 @@ const nav = [
   { to: "/pending", label: "Pending सूची", icon: Clock },
   { to: "/ward-status", label: "वार्डवार वोट स्थिति", icon: ListChecks },
   { to: "/reports", label: "वार्ड रिपोर्ट", icon: BarChart3 },
+  { to: "/events", label: "इवेंट कॉलिंग", icon: CalendarDays },
   { to: "/wards", label: "वार्ड मैनेजमेंट", icon: Map, adminOnly: true },
   { to: "/data-admin", label: "डेटा प्रबंधन", icon: Trash2, adminOnly: true },
   { to: "/users", label: "यूजर मैनेजमेंट", icon: UserCog, adminOnly: true },
@@ -65,7 +66,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
   }
 
   const visibleNav = nav.filter((item) => !("adminOnly" in item && item.adminOnly) || identity.role === "admin");
-  const mobileNav = visibleNav.filter((item) => ["/", "/entry", "/voters", "/ward-status", "/users", "/reports"].includes(item.to)).slice(0, 6);
+  const mobileNav = visibleNav.filter((item) => ["/", "/entry", "/voters", "/ward-status", "/events", "/reports"].includes(item.to)).slice(0, 6);
 
   return (
     <div className="min-h-screen md:flex">

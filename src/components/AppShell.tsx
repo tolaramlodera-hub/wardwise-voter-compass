@@ -40,7 +40,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
         if (active) await navigate({ to: "/login", replace: true });
         return;
       }
-      if (profile.role === "voter" && pathname !== "/events") {
+      if (profile.role === "voter" && !["/events", "/voters"].includes(pathname)) {
         if (active) await navigate({ to: "/events", replace: true });
         return;
       }
@@ -69,7 +69,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
     return <div className="flex min-h-screen items-center justify-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="h-5 w-5 animate-spin" /> सुरक्षित लॉगिन जाँचा जा रहा है...</div>;
   }
 
-  const visibleNav = nav.filter((item) => identity.role === "voter" ? item.to === "/events" : !(("adminOnly" in item) && item.adminOnly) || identity.role === "admin");
+  const visibleNav = nav.filter((item) => identity.role === "voter" ? ["/events", "/voters"].includes(item.to) : !(("adminOnly" in item) && item.adminOnly) || identity.role === "admin");
   const mobileNav = visibleNav.filter((item) => ["/", "/entry", "/voters", "/ward-status", "/events", "/reports"].includes(item.to)).slice(0, 6);
 
   return (

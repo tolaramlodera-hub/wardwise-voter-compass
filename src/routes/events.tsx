@@ -222,8 +222,8 @@ function Events() {
       if (!history.length) rows.push([h.house_number,h.household_label,h.status,String(h.voter_ids.length),"","",""]);
       else for (const r of history) rows.push([h.house_number,h.household_label,h.status,String(h.voter_ids.length),profiles.find((p) => p.user_id === r.caller_id)?.full_name ?? r.caller_id,r.outcome,new Date(r.created_at).toLocaleString("hi-IN")]);
     }
-    const csv = rows.map((row) => row.map((v) => '"' + String(v ?? "").replaceAll('"','""') + '"').join(",")).join("\\n");
-    const url = URL.createObjectURL(new Blob(["\\uFEFF" + csv], { type: "text/csv;charset=utf-8" }));
+    const csv = rows.map((row) => row.map((v) => '"' + String(v ?? "").replaceAll('"','""') + '"').join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a"); a.href = url; a.download = "event-calling-" + selected + ".csv"; a.click(); URL.revokeObjectURL(url);
   };
 

@@ -74,8 +74,8 @@ function Login() {
   const submitSignup = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const ids = voterIds.split(",").map((v) => v.trim()).filter(Boolean);
-    if (!fullName.trim() || !ids.length || !/^[6-9]\\d{9}$/.test(mobile.replace(/\\D/g, ""))) { setError("पूरा नाम, सही 10 अंकों का मोबाइल नंबर और कम से कम एक मतदाता पहचान संख्या भरें।"); return; }
-    sessionStorage.setItem("pending_google_voter", JSON.stringify({ fullName: fullName.trim(), voterIds: ids, phone: mobile.replace(/\\D/g, ""), consentToEventContact: contactConsent }));
+    if (!fullName.trim() || !ids.length || !/^[6-9]\d{9}$/.test(mobile.replace(/\D/g, ""))) { setError("पूरा नाम, सही 10 अंकों का मोबाइल नंबर और कम से कम एक मतदाता पहचान संख्या भरें।"); return; }
+    sessionStorage.setItem("pending_google_voter", JSON.stringify({ fullName: fullName.trim(), voterIds: ids, phone: mobile.replace(/\D/g, ""), consentToEventContact: contactConsent }));
     await startGoogleLogin();
   };
 
@@ -172,10 +172,10 @@ function Login() {
           <p className="text-sm text-muted-foreground">Google अकाउंट चुनकर मतदाता का नया अकाउंट बनाएँ। मतदाता पहचान संख्या की जाँच के बाद Admin इसे सक्रिय करेगा।</p>
           <input className={inputCls} required value={fullName} onChange={e => setFullName(e.target.value)} placeholder="पूरा नाम" autoComplete="name" />
           <label className="block text-sm font-medium">मतदाता पहचान संख्या <span className="font-normal text-muted-foreground">(परिवार के लिए कॉमा लगाकर कई संख्या)</span><input className={inputCls + " mt-1"} required value={voterIds} onChange={e => setVoterIds(e.target.value)} placeholder="जैसे ABC123, ABC124" /></label>
-          <label className="block text-sm font-medium">मोबाइल नंबर<input className={inputCls + " mt-1"} required type="tel" inputMode="numeric" maxLength={10} autoComplete="tel" value={mobile} onChange={e => setMobile(e.target.value.replace(/\\D/g, "").slice(0,10))} placeholder="10 अंकों का मोबाइल नंबर" /></label>
+          <label className="block text-sm font-medium">मोबाइल नंबर<input className={inputCls + " mt-1"} required type="tel" inputMode="numeric" maxLength={10} autoComplete="tel" value={mobile} onChange={e => setMobile(e.target.value.replace(/\D/g, "").slice(0,10))} placeholder="10 अंकों का मोबाइल नंबर" /></label>
           <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={contactConsent} onChange={e => setContactConsent(e.target.checked)} /><span>मैं इवेंट/कार्यक्रम के संबंध में इस मोबाइल नंबर पर संपर्क करने की सहमति देता/देती हूँ। सहमति न देने पर भी अकाउंट की जाँच हो सकती है, लेकिन मेरा नंबर कॉलर को नहीं दिखेगा।</span></label>
           {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
-          <button type="submit" disabled={busy || !fullName.trim() || !voterIds.trim() || !/^[6-9]\\d{9}$/.test(mobile)} className={btnPrimary + " w-full"}>{busy ? "Google पर जा रहे हैं..." : "Google से रजिस्ट्रेशन करें"}</button>
+          <button type="submit" disabled={busy || !fullName.trim() || !voterIds.trim() || !/^[6-9]\d{9}$/.test(mobile)} className={btnPrimary + " w-full"}>{busy ? "Google पर जा रहे हैं..." : "Google से रजिस्ट्रेशन करें"}</button>
         </form>
        ) : mode === "otp" ? (
         <div className="space-y-3">

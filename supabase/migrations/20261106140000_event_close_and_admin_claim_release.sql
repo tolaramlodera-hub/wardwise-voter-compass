@@ -24,3 +24,11 @@ begin
 end $$;
 revoke all on function public.release_event_household_claim(uuid) from public;
 grant execute on function public.release_event_household_claim(uuid) to authenticated;
+
+revoke execute on function public.is_active_admin() from anon;
+revoke execute on function public.is_event_member(uuid) from anon;
+revoke execute on function public.claim_event_household(uuid,integer) from anon;
+revoke execute on function public.submit_event_call(uuid,text,text) from anon;
+revoke execute on function public.correct_event_household_status(uuid,text,text) from anon;
+revoke execute on function public.split_event_household(uuid,uuid[],text) from anon;
+revoke execute on function public.release_event_household_claim(uuid) from anon;

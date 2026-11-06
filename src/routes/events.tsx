@@ -9,6 +9,7 @@ type EventRow = { id: string; name: string; purpose: string; event_at: string; p
 type Household = { id: string; ward_id: string; house_number: string; household_label: string; voter_ids: string[]; status: string };
 type Profile = { user_id: string; full_name: string; role: string };
 type Contact = { voter_id: string; phone: string };
+const eventStatusLabels: Record<string, string> = { pending: "अनुमोदन लंबित", approved: "स्वीकृत", rejected: "अस्वीकृत", closed: "बंद" };
 
 export const Route = createFileRoute("/events")({ head: () => ({ meta: [{ title: "इवेंट एवं संपर्क प्रबंधन" }] }), component: Events });
 
@@ -19,7 +20,8 @@ function Events() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [selected, setSelected] = useState("");
   const [households, setHouseholds] = useState<Household[]>([]);
-  const [profiles, setProfiles] = useState<Profile[]>([]);\n  const [memberEventIds, setMemberEventIds] = useState<string[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [memberEventIds, setMemberEventIds] = useState<string[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [claims, setClaims] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -35,7 +37,9 @@ function Events() {
     setUserId(auth.user.id);
     const { data: p } = await supabase.from("profiles").select("role").eq("user_id", auth.user.id).maybeSingle();
     setRole(p?.role ?? "staff");
-    const { data: memberships } = await supabase.from("event_members").select("event_id").eq("user_id", auth.user.id).eq("is_active", true);\n    setMemberEventIds((memberships ?? []).map((m) => m.event_id));\n    const { data, error } = await supabase.from("community_events").select("*").order("created_at", { ascending: false });
+    const { data: memberships } = await supabase.from("event_members").select("event_id").eq("user_id", auth.user.id).eq("is_active", true);
+    setMemberEventIds((memberships ?? []).map((m) => m.event_id));
+    const { data, error } = await supabase.from("community_events").select("*").order("created_at", { ascending: false });
     if (error) { toast.error("इवेंट सूची लोड नहीं हुई: " + error.message); return; }
     setEvents((data ?? []) as EventRow[]);
     const { data: people } = await supabase.from("profiles").select("user_id,full_name,role").eq("is_active", true).order("full_name");
@@ -162,7 +166,7 @@ function Events() {
           {visibleEvents.length === 0 && <p className="text-sm text-muted-foreground">अभी कोई इवेंट नहीं है।</p>}
           {visibleEvents.map((ev) => <button key={ev.id} onClick={() => setSelected(ev.id)} className={"w-full rounded-lg border p-3 text-left " + (selected === ev.id ? "border-primary bg-primary/5" : "hover:bg-muted")}>
             <div className="font-semibold">{ev.name}</div><div className="mt-1 text-xs text-muted-foreground">{new Date(ev.event_at).toLocaleString("hi-IN")} · {ev.place}</div>
-            <span className="mt-2 inline-block rounded-full bg-muted px-2 py-1 text-xs">{({pending:"अनुमोदन लंबित",approved:"स्वीकृत",rejected:"अस्वीकृत",closed:"बंद"})[ev.status] ?? ev.status}</span>
+            <span className="mt-2 inline-block rounded-full bg-muted px-2 py-1 text-xs">{eventStatusLabels[ev.status] ?? ev.status}</span>
           </button>)}
         </div>
       </Card>

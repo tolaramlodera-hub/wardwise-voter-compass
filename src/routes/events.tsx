@@ -95,7 +95,17 @@ function Events() {
     }).eq("id", ev.id);
     setBusy(false);
     if (error) toast.error("स्थिति अपडेट नहीं हुई: " + error.message);
-    else { toast.success(status === "approved" ? "इवेंट स्वीकृत" : "इवेंट अस्वीकृत"); await load(); }
+    else {
+      if (status === "approved") {
+        const { error: memberError } = await supabase.from("event_members").upsert(
+          { event_id: ev.id, user_id: ev.created_by, member_role: "organizer", is_active: true, appointed_by: userId },
+          { onConflict: "event_id,user_id" },
+        );
+        if (memberError) toast.error("इवेंट स्वीकृत है, लेकिन आयोजक टीम में नहीं जुड़ पाया: " + memberError.message);
+      }
+      toast.success(status === "approved" ? "इवेंट स्वीकृत" : "इवेंट अस्वीकृत");
+      await load();
+    }
   };
 
   const generateHouseholds = async (ev: EventRow) => {

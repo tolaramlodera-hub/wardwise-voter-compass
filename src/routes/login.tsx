@@ -61,20 +61,10 @@ function Login() {
     const name = String(user.user_metadata.full_name || pendingSignup?.fullName || "").trim();
     const ids = Array.isArray(user.user_metadata.voter_ids) ? user.user_metadata.voter_ids.map(String) : (pendingSignup?.voterIds ?? []);
     if (!name || !ids.length) return { error: "रजिस्ट्रेशन में नाम या मतदाता पहचान संख्या नहीं मिली।", pending: false };
-    const { error: profileError } = await supabase.from("profiles").insert({ user_id: user.id, full_name: name, role: "voter", is_active: false });
-    if (profileError) return { error: profileError.message, pending: false };
-    const links: { user_id: string; voter_id: string; relation: string }[] = [];
-    for (const id of [...new Set(ids)]) {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
-      const query = supabase.from("voters").select("id");
-      const { data: voter } = isUuid ? await query.eq("id", id).maybeSingle() : await query.eq("voter_id", id).maybeSingle();
-      if (!voter) return { error: "मतदाता पहचान संख्या " + id + " सूची में नहीं मिली। सही संख्या जाँचें।", pending: false };
-      links.push({ user_id: user.id, voter_id: voter.id, relation: links.length ? "family_member" : "self" });
-    }
-    const { error: linkError } = await supabase.from("voter_account_links").insert(links);
-    if (linkError) return { error: linkError.message.includes("duplicate") ? "इस मतदाता रिकॉर्ड का अकाउंट पहले से जुड़ा है। एडमिन से संपर्क करें।" : linkError.message, pending: false };
+    const { data: registration, error: registrationError } = await supabase.rpc("register_google_voter", { p_full_name: name, p_voter_ids: ids });
+    if (registrationError) return { error: "Google रजिस्ट्रेशन पूरा नहीं हुआ: " + registrationError.message, pending: false };
     sessionStorage.removeItem("pending_google_voter");
-    return { error: "", pending: true };
+    return { error: "", pending: registration?.status === "pending_admin_approval" };
   };
 
   const submitSignup = async (event: React.FormEvent<HTMLFormElement>) => {

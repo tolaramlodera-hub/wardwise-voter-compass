@@ -85,12 +85,16 @@ function Events() {
     setHouseholds(rows);
     const ids = [...new Set(rows.flatMap((h) => h.voter_ids))];
     if (!ids.length) { setContacts([]); setVoterDetails([]); setClaims({}); setCallRecords([]); return; }
-    const [{ data: phoneRows }, { data: claimRows }, { data: voterRows }, { data: recordRows }] = await Promise.all([
+    const [{ data: phoneRows, error: phoneError }, { data: claimRows, error: claimError }, { data: voterRows, error: voterError }, { data: recordRows, error: recordError }] = await Promise.all([
       supabase.from("voter_contacts").select("voter_id,phone").in("voter_id", ids).eq("consent_to_event_contact", true),
       supabase.from("event_call_claims").select("household_id,caller_id,expires_at").in("household_id", rows.map((h) => h.id)).gt("expires_at", new Date().toISOString()),
-      supabase.from("voters").select("id,voter_id,full_name,relative_name,house_number,ward_id").in("id", ids),
+      supabase.rpc("get_event_voter_details", { p_event_id: eventId }),
       supabase.from("event_calling_records").select("caller_id,outcome,created_at,household_id").in("household_id", rows.map((h) => h.id)).order("created_at", { ascending: false }),
     ]);
+    if (voterError) toast.error("मतदाता विवरण लोड नहीं हुआ: " + voterError.message);
+    if (phoneError) toast.error("सहमति वाले मोबाइल नंबर लोड नहीं हुए: " + phoneError.message);
+    if (claimError) toast.error("कॉल स्थिति लोड नहीं हुई: " + claimError.message);
+    if (recordError) toast.error("कॉल इतिहास लोड नहीं हुआ: " + recordError.message);
     setContacts((phoneRows ?? []) as Contact[]);
     setVoterDetails((voterRows ?? []) as Voter[]);
     setCallRecords((recordRows ?? []) as typeof callRecords);

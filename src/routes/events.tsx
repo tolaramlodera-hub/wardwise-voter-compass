@@ -30,7 +30,6 @@ function Events() {
   const [voterDetails, setVoterDetails] = useState<Voter[]>([]);
   const [allVoters, setAllVoters] = useState<Voter[]>([]);
   const [accountWards, setAccountWards] = useState<WardOption[]>([]);
-  const [householdWardSelection, setHouseholdWardSelection] = useState<string[]>([]);
   const [callingWardId, setCallingWardId] = useState("all");
   const [callingWardSelection, setCallingWardSelection] = useState<string[]>([]);
   const [pendingLinkWard, setPendingLinkWard] = useState<Record<string, string>>({});
@@ -116,13 +115,31 @@ function Events() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     setBusy(true);
-    const { error } = await supabase.from("community_events").insert({
+    const { data: createdEvent, error } = await supabase.from("community_events").insert({
       name: String(f.get("name")), purpose: String(f.get("purpose")), event_at: new Date(String(f.get("event_at"))).toISOString(),
       place: String(f.get("place")), details: String(f.get("details") || ""), created_by: userId,
-    });
+      organizer_id: userId, status: "approved",
+    }).select("id").single();
+    if (error || !createdEvent) {
+      setBusy(false);
+      toast.error("इवेंट नहीं बना: " + (error?.message ?? "इवेंट आईडी नहीं मिली"));
+      return;
+    }
+    const { error: memberError } = await supabase.from("event_members").upsert(
+      { event_id: createdEvent.id, user_id: userId, member_role: "organizer", is_active: true, appointed_by: userId },
+      { onConflict: "event_id,user_id" },
+    );
+    const { data: preparedCount, error: prepareError } = await supabase.rpc("prepare_event_households", { p_event_id: createdEvent.id });
     setBusy(false);
-    if (error) toast.error("इवेंट अनुरोध नहीं बना: " + error.message);
-    else { toast.success("इवेंट अनुमोदन के लिए भेज दिया गया"); setCreateOpen(false); await load(); }
+    if (memberError || prepareError) {
+      toast.error("इवेंट बन गया, लेकिन टीम/घर सूची तैयार करने में समस्या आई: " + (memberError?.message ?? prepareError?.message));
+    } else {
+      toast.success("इवेंट तुरंत शुरू हो गया। " + Number(preparedCount ?? 0) + " घरों की कॉलिंग सूची अपने-आप तैयार हुई।");
+    }
+    setCreateOpen(false);
+    setSelected(createdEvent.id);
+    await load();
+    await loadHouseholds(createdEvent.id);
   };
 
   const reviewEvent = async (ev: EventRow, status: "approved" | "rejected") => {
@@ -143,26 +160,6 @@ function Events() {
       toast.success(status === "approved" ? "इवेंट स्वीकृत" : "इवेंट अस्वीकृत");
       await load();
     }
-  };
-
-  const generateHouseholds = async (ev: EventRow) => {
-    if (!householdWardSelection.length) { toast.error("पहले कम से कम एक वार्ड चुनें"); return; }
-    setBusy(true);
-    const { data: voters, error } = await supabase.from("voters").select("id,ward_id,house_number").in("ward_id", householdWardSelection).not("house_number", "is", null).order("house_number");
-    if (error) { setBusy(false); toast.error("मतदाता सूची नहीं मिली: " + error.message); return; }
-    const groups = new Map<string, { ward_id: string; house_number: string; voter_ids: string[] }>();
-    for (const v of voters ?? []) {
-      const house = String(v.house_number ?? "").trim();
-      if (!house) continue;
-      const key = v.ward_id + "::" + house;
-      const group = groups.get(key) ?? { ward_id: v.ward_id, house_number: house, voter_ids: [] };
-      group.voter_ids.push(v.id); groups.set(key, group);
-    }
-    const rows = [...groups.values()].map((g) => ({ event_id: ev.id, ...g, household_label: "" }));
-    const { error: saveError } = rows.length ? await supabase.from("event_households").upsert(rows, { onConflict: "event_id,ward_id,house_number,household_label", ignoreDuplicates: true }) : { error: null };
-    setBusy(false);
-    if (saveError) toast.error("घर सूची नहीं बनी: " + saveError.message);
-    else { toast.success(rows.length + " घरों की सूची तैयार हुई। एक ही मकान में अलग परिवार हों तो सूची की जाँच/विभाजन Admin से करवाएँ।"); setSelected(ev.id); await loadHouseholds(ev.id); }
   };
 
   const appointMember = async () => {
@@ -331,14 +328,6 @@ function Events() {
               {role === "admin" && selectedEvent.status === "pending" && <div className="flex gap-2"><button disabled={busy} className={btnPrimary} onClick={() => void reviewEvent(selectedEvent,"approved")}><Check className="h-4 w-4"/>स्वीकृत</button><button disabled={busy} className={btnOutline} onClick={() => void reviewEvent(selectedEvent,"rejected")}>अस्वीकृत</button></div>}
             </div>
             {selectedEvent.status === "approved" && (role === "admin" || selectedEvent.organizer_id === userId) && <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
-              {role === "admin" && <div className="w-full space-y-2">
-                <div className="font-semibold text-sm">घर तैयार करने के लिए वार्ड चुनें</div>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" className={householdWardSelection.length === accountWards.length ? btnPrimary : btnOutline} onClick={() => setHouseholdWardSelection(accountWards.map((w) => w.id))}>सभी वार्ड</button>
-                  {accountWards.map((ward) => <button type="button" key={ward.id} className={householdWardSelection.includes(ward.id) ? btnPrimary : btnOutline} onClick={() => setHouseholdWardSelection((old) => old.includes(ward.id) ? old.filter((id) => id !== ward.id) : [...old, ward.id])}>{ward.name || ("वार्ड " + ward.ward_number)}</button>)}
-                </div>
-                <button disabled={busy || !householdWardSelection.length} className={btnOutline} onClick={() => void generateHouseholds(selectedEvent)}><RefreshCw className="h-4 w-4"/>मतदाता सूची से घर तैयार करें</button>
-              </div>}
               <select className={inputCls + " max-w-xs"} value={teamUser} onChange={(e) => setTeamUser(e.target.value)}><option value="">कॉलर चुनें</option>{profiles.filter((p) => p.user_id !== userId).map((p) => <option key={p.user_id} value={p.user_id}>{p.full_name} ({p.role})</option>)}</select>
               <button disabled={busy || !teamUser} className={btnPrimary} onClick={() => void appointMember()}><Users className="h-4 w-4"/>टीम में जोड़ें</button>
             </div>}

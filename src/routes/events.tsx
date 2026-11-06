@@ -9,6 +9,7 @@ type EventRow = { id: string; name: string; purpose: string; event_at: string; p
 type Household = { id: string; ward_id: string; house_number: string; household_label: string; voter_ids: string[]; status: string };
 type Profile = { user_id: string; full_name: string; role: string };
 type Contact = { voter_id: string; phone: string };
+type SavedContact = { voter_id: string; phone: string; consent_to_event_contact: boolean };
 type Voter = { id: string; voter_id: string | null; full_name: string; relative_name: string | null; house_number: string | null; ward_id: string };
 const eventStatusLabels: Record<string, string> = { pending: "अनुमोदन लंबित", approved: "स्वीकृत", rejected: "अस्वीकृत", closed: "बंद" };
 
@@ -24,6 +25,7 @@ function Events() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [memberEventIds, setMemberEventIds] = useState<string[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [savedContacts, setSavedContacts] = useState<SavedContact[]>([]);
   const [voterDetails, setVoterDetails] = useState<Voter[]>([]);
   const [allVoters, setAllVoters] = useState<Voter[]>([]);
   const [contactSearch, setContactSearch] = useState("");

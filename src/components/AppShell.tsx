@@ -21,7 +21,7 @@ const nav = [
 export function AppShell({ title, children }: { title: string; children: ReactNode }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const [identity, setIdentity] = useState<{ name: string; role: "admin" | "staff" } | null>(null);
+  const [identity, setIdentity] = useState<{ name: string; role: "admin" | "staff" | "voter" } | null>(null);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -35,12 +35,12 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
       }
       const { data: profile, error } = await supabase.from("profiles")
         .select("full_name,role,is_active").eq("user_id", user.id).maybeSingle();
-      if (error || !profile?.is_active || (profile.role !== "admin" && profile.role !== "staff")) {
+      if (error || !profile?.is_active || (profile.role !== "admin" && profile.role !== "staff" && profile.role !== "voter")) {
         await supabase.auth.signOut();
         if (active) await navigate({ to: "/login", replace: true });
         return;
       }
-      if (profile.role === "staff" && ["/wards", "/data-admin", "/users", "/audit"].includes(pathname)) {
+      if (profile.role === "voter" && pathname !== "/events") {\n        if (active) await navigate({ to: "/events", replace: true });\n        return;\n      }\n      if (profile.role === "staff" && ["/wards", "/data-admin", "/users", "/audit"].includes(pathname)) {
         if (active) await navigate({ to: "/", replace: true });
         return;
       }
@@ -65,7 +65,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
     return <div className="flex min-h-screen items-center justify-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="h-5 w-5 animate-spin" /> सुरक्षित लॉगिन जाँचा जा रहा है...</div>;
   }
 
-  const visibleNav = nav.filter((item) => !("adminOnly" in item && item.adminOnly) || identity.role === "admin");
+  const visibleNav = nav.filter((item) => identity.role === "voter" ? item.to === "/events" : !(("adminOnly" in item) && item.adminOnly) || identity.role === "admin");
   const mobileNav = visibleNav.filter((item) => ["/", "/entry", "/voters", "/ward-status", "/events", "/reports"].includes(item.to)).slice(0, 6);
 
   return (
@@ -83,14 +83,14 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
         </nav>
         <div className="border-t border-sidebar-border p-4 text-sm">
           <div className="font-semibold">{identity.name}</div>
-          <div className="text-xs opacity-70">{identity.role === "admin" ? "एडमिन" : "स्टाफ"}</div>
+          <div className="text-xs opacity-70">{identity.role === "admin" ? "एडमिन" : identity.role === "voter" ? "मतदाता" : "स्टाफ"}</div>
           <button type="button" onClick={logout} className="mt-2 flex items-center gap-2 opacity-80 hover:opacity-100"><LogOut className="h-4 w-4" /> लॉगआउट</button>
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col pb-20 md:pb-0">
         <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-card/90 px-4 py-3 backdrop-blur md:px-8">
           <div className="flex items-center gap-2"><ShieldCheck className="h-6 w-6 text-primary md:hidden" /><h1 className="text-xl font-bold md:text-2xl">{title}</h1></div>
-          <div className="flex items-center gap-2 text-sm"><span className="hidden rounded-full bg-secondary px-3 py-1 text-secondary-foreground sm:inline">{identity.role === "admin" ? "एडमिन" : "स्टाफ"}</span><button type="button" onClick={logout} className="md:hidden"><LogOut className="h-5 w-5 text-muted-foreground" /></button></div>
+          <div className="flex items-center gap-2 text-sm"><span className="hidden rounded-full bg-secondary px-3 py-1 text-secondary-foreground sm:inline">{identity.role === "admin" ? "एडमिन" : identity.role === "voter" ? "मतदाता" : "स्टाफ"}</span><button type="button" onClick={logout} className="md:hidden"><LogOut className="h-5 w-5 text-muted-foreground" /></button></div>
         </header>
         <main className="flex-1 p-4 md:p-8">{children}</main>
       </div>

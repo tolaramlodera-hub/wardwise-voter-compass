@@ -9,7 +9,6 @@ type EventRow = { id: string; name: string; purpose: string; event_at: string; p
 type Household = { id: string; ward_id: string; house_number: string; household_label: string; voter_ids: string[]; status: string };
 type Profile = { user_id: string; full_name: string; role: string };
 type Contact = { voter_id: string; phone: string };
-type SavedContact = { voter_id: string; phone: string; consent_to_event_contact: boolean };
 type Voter = { id: string; voter_id: string | null; full_name: string; relative_name: string | null; house_number: string | null; ward_id: string };
 type WardOption = { id: string; ward_number: number; name: string; is_active: boolean };
 type PendingVoterAccount = { user_id: string; full_name: string; voter_account_links: { voters: { id: string; full_name: string; voter_id: string | null; house_number: string | null } | null }[] };
@@ -28,7 +27,6 @@ function Events() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [memberEventIds, setMemberEventIds] = useState<string[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [savedContacts, setSavedContacts] = useState<SavedContact[]>([]);
   const [voterDetails, setVoterDetails] = useState<Voter[]>([]);
   const [allVoters, setAllVoters] = useState<Voter[]>([]);
   const [accountWards, setAccountWards] = useState<WardOption[]>([]);
@@ -38,10 +36,6 @@ function Events() {
   const [pendingContactSubmissions, setPendingContactSubmissions] = useState<PendingContactSubmission[]>([]);
   const [pendingLinkSearch, setPendingLinkSearch] = useState<Record<string, string>>({});
   const [pendingLinkSelection, setPendingLinkSelection] = useState<Record<string, string>>({});
-  const [contactSearch, setContactSearch] = useState("");
-  const [contactVoterId, setContactVoterId] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-  const [contactConsent, setContactConsent] = useState(false);
   const [splitHouse, setSplitHouse] = useState<Household | null>(null);
   const [splitSelected, setSplitSelected] = useState<string[]>([]);
   const [splitLabel, setSplitLabel] = useState("");
@@ -69,16 +63,14 @@ function Events() {
     if (peopleError) toast.error("कॉलर सूची लोड नहीं हुई: " + peopleError.message);
     setProfiles((people ?? []) as Profile[]);
     if (p?.role === "admin") {
-      const [{ data: voters }, { data: savedContacts }, { data: pendingAccounts }, { data: wardRows }, { data: pendingContacts }] = await Promise.all([
+      const [{ data: voters }, { data: pendingAccounts }, { data: wardRows }, { data: pendingContacts }] = await Promise.all([
         supabase.from("voters").select("id,voter_id,full_name,relative_name,house_number,ward_id").order("full_name").limit(2500),
-        supabase.from("voter_contacts").select("voter_id,phone,consent_to_event_contact"),
         supabase.from("profiles").select("user_id,full_name,voter_account_links(voters(id,full_name,voter_id,house_number))").eq("role", "voter").eq("is_active", false),
         supabase.from("wards").select("id,ward_number,name,is_active").eq("is_active", true).order("ward_number"),
         supabase.from("pending_voter_contact_submissions").select("user_id,phone,consent_to_event_contact,submitted_at"),
       ]);
       setAllVoters((voters ?? []) as Voter[]);
       setAccountWards((wardRows ?? []) as WardOption[]);
-      setSavedContacts((savedContacts ?? []) as SavedContact[]);
       setPendingVoterAccounts((pendingAccounts ?? []) as unknown as PendingVoterAccount[]);
       setPendingContactSubmissions((pendingContacts ?? []) as PendingContactSubmission[]);
     }
@@ -233,23 +225,6 @@ function Events() {
     else { toast.success("मोबाइल नंबर और सहमति जाँचकर मतदाता अकाउंट सक्रिय कर दिया गया"); await load(); }
   };
 
-  const saveContact = async () => {
-    if (!contactVoterId || !contactPhone.trim()) { toast.error("मतदाता और मोबाइल नंबर भरें"); return; }
-    setBusy(true);
-    const { error } = await supabase.from("voter_contacts").upsert({
-      voter_id: contactVoterId, phone: contactPhone.trim(), consent_to_event_contact: contactConsent,
-      consent_recorded_at: contactConsent ? new Date().toISOString() : null, updated_by: userId, updated_at: new Date().toISOString(),
-    }, { onConflict: "voter_id" });
-    setBusy(false);
-    if (error) toast.error("मोबाइल नंबर सेव नहीं हुआ: " + error.message);
-    else {
-      setSavedContacts((old) => [...old.filter((x) => x.voter_id !== contactVoterId), { voter_id: contactVoterId, phone: contactPhone.trim(), consent_to_event_contact: contactConsent }]);
-      toast.success("मोबाइल नंबर और सहमति सेव हुई");
-      setContactVoterId(""); setContactPhone(""); setContactConsent(false);
-      if (selected) await loadHouseholds(selected);
-    }
-  };
-
   const splitFamily = async () => {
     if (!splitHouse || !splitSelected.length || !splitLabel.trim()) { toast.error("अलग परिवार का नाम और सदस्य चुनें"); return; }
     if (splitSelected.length >= splitHouse.voter_ids.length) { toast.error("कम से कम एक सदस्य पुराने परिवार में छोड़ें"); return; }
@@ -311,7 +286,7 @@ function Events() {
       <p className="text-sm text-muted-foreground">इवेंट अनुमोदन, टीम नियुक्ति और साझा लाइव कॉलिंग सूची</p>
       <button className={btnPrimary} onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> नया इवेंट अनुरोध</button>
     </div>
-    {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-3 font-bold">मतदाता मोबाइल नंबर और संपर्क सहमति</h2><div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"><input className={inputCls} value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} placeholder="मतदाता नाम / पहचान संख्या खोजें"/><select className={inputCls} value={contactVoterId} onChange={(e) => { setContactVoterId(e.target.value); const found = savedContacts.find((x) => x.voter_id === e.target.value); setContactPhone(found?.phone ?? ""); setContactConsent(Boolean(found?.consent_to_event_contact)); }}><option value="">मतदाता चुनें</option>{allVoters.filter((v) => !contactSearch || (v.full_name + " " + (v.voter_id ?? "")).toLowerCase().includes(contactSearch.toLowerCase())).slice(0,100).map((v) => <option key={v.id} value={v.id}>{v.full_name} · {v.voter_id ?? "ID नहीं"} · मकान {v.house_number ?? "-"}</option>)}</select><input className={inputCls} value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="मोबाइल नंबर" type="tel"/><button className={btnPrimary} disabled={busy || !contactVoterId} onClick={() => void saveContact()}>सेव करें</button></div><label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" checked={contactConsent} onChange={(e) => setContactConsent(e.target.checked)} className="mt-1"/>मतदाता ने इवेंट के संबंध में संपर्क करने की स्पष्ट सहमति दी है। बिना सहमति नंबर कॉलर को नहीं दिखेगा।</label></Card>}
+}
     {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-2 font-bold">नए मतदाता अकाउंट की जाँच</h2>{pendingVoterAccounts.length === 0 ? <p className="text-sm text-muted-foreground">कोई नया अकाउंट स्वीकृति के लिए लंबित नहीं है।</p> : <div className="space-y-3">{pendingVoterAccounts.map((account) => {
       const links = account.voter_account_links ?? [];
       const linked = links.filter((link) => link.voters);

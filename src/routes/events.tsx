@@ -188,6 +188,15 @@ function Events() {
     else { toast.success(outcome === "contacted" ? "संपर्क पूरा — सभी सदस्यों की सूची से हटाया गया" : "कॉल परिणाम सेव हुआ"); setClaimed(null); setNotes(""); await loadHouseholds(selected); }
   };
 
+  const approveVoterAccount = async (account: PendingVoterAccount) => {
+    if (!account.voter_account_links?.length) { toast.error("इस अकाउंट से कोई मतदाता रिकॉर्ड जुड़ा नहीं है"); return; }
+    setBusy(true);
+    const { error } = await supabase.functions.invoke("admin-user-management", { body: { action: "toggle", user_id: account.user_id, is_active: true } });
+    setBusy(false);
+    if (error) toast.error("अकाउंट सक्रिय नहीं हुआ: " + error.message);
+    else { toast.success("मतदाता अकाउंट सक्रिय कर दिया गया"); await load(); }
+  };
+
   const saveContact = async () => {
     if (!contactVoterId || !contactPhone.trim()) { toast.error("मतदाता और मोबाइल नंबर भरें"); return; }
     setBusy(true);

@@ -137,6 +137,8 @@ function Login() {
     }
   };
 
+  const startGoogleLogin = async () => { setBusy(true); setError(""); setNotice(""); try { const { error } = await getSupabaseBrowserClient().auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin + "/login" } }); if (error) setError("Google लॉगिन शुरू नहीं हो सका: " + error.message); } catch { setError("Google लॉगिन सेटअप उपलब्ध नहीं है।"); } finally { setBusy(false); } };
+
   const sendMagicLink = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true);
@@ -196,7 +198,7 @@ function Login() {
         </form>
       ) : mode === "otp" ? (
         <form onSubmit={sendMagicLink} className="space-y-3">
-          <p className="text-sm text-muted-foreground">रजिस्टर्ड ईमेल पर आए सुरक्षित लॉगिन लिंक से प्रवेश करें।</p>
+          <p className="text-sm text-muted-foreground">फोन में पहले से लॉगिन Google अकाउंट चुनकर सुरक्षित प्रवेश करें।</p><button type="button" onClick={() => void startGoogleLogin()} disabled={busy} className={btnPrimary + " w-full"}>{busy ? "Google पर जा रहे हैं..." : "Google से जारी रखें"}</button>
           <label className="block text-sm font-medium">रजिस्टर्ड ईमेल
             <div className="relative mt-1"><Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" /><input className={inputCls + " pl-9"} type="email" required value={identifier} onChange={e => setIdentifier(e.target.value)} placeholder="name@gmail.com" autoComplete="email" disabled={linkSent} /></div>
           </label>

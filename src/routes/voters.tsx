@@ -168,7 +168,17 @@ function Voters() {
 
   useEffect(() => { void loadVoters(); }, [loadVoters]);
 
-  const list = voters;\n\n  const saveMyContact = async () => {\n    const phone = myMobile.replace(/\\D/g, "");\n    if (!/^[6-9]\\d{9}$/.test(phone)) { toast.error("सही 10 अंकों का मोबाइल नंबर भरें"); return; }\n    setContactSaving(true);\n    const { error } = await supabase.rpc("update_my_voter_contact", { p_phone: phone, p_consent_to_event_contact: myContactConsent });\n    setContactSaving(false);\n    if (error) toast.error("मोबाइल नंबर/सहमति सेव नहीं हुई: " + error.message);\n    else toast.success("आपका मोबाइल नंबर और संपर्क सहमति अपडेट हो गई");\n  };
+  const list = voters;
+
+  const saveMyContact = async () => {
+    const phone = myMobile.replace(/\\D/g, "");
+    if (!/^[6-9]\\d{9}$/.test(phone)) { toast.error("सही 10 अंकों का मोबाइल नंबर भरें"); return; }
+    setContactSaving(true);
+    const { error } = await supabase.rpc("update_my_voter_contact", { p_phone: phone, p_consent_to_event_contact: myContactConsent });
+    setContactSaving(false);
+    if (error) toast.error("मोबाइल नंबर/सहमति सेव नहीं हुई: " + error.message);
+    else toast.success("आपका मोबाइल नंबर और संपर्क सहमति अपडेट हो गई");
+  };
 
   const openFamily = (group: HouseholdGroup) => {
     setFamilyOpen(group);
@@ -238,7 +248,8 @@ function Voters() {
 
   return (
     <AppShell title="मतदाता सूची">
-      {isVoter && <Card className="mb-4 p-4"><h2 className="mb-3 text-lg font-bold">मेरा मोबाइल नंबर और संपर्क सहमति</h2><p className="mb-3 text-sm text-muted-foreground">अपना मोबाइल नंबर और इवेंट/कार्यक्रम के संबंध में संपर्क की सहमति स्वयं अपडेट करें। सहमति हटाने पर आपका नंबर कॉलर को नहीं दिखेगा।</p><label className="mb-3 block text-sm font-medium">मोबाइल नंबर<input className={inputCls + " mt-1"} type="tel" inputMode="numeric" maxLength={10} value={myMobile} onChange={(e) => setMyMobile(e.target.value.replace(/\\D/g, "").slice(0,10))} placeholder="10 अंकों का मोबाइल नंबर"/></label><label className="mb-4 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={myContactConsent} onChange={(e) => setMyContactConsent(e.target.checked)}/><span>मैं इवेंट/कार्यक्रम के संबंध में इस मोबाइल नंबर पर संपर्क करने की स्पष्ट सहमति देता/देती हूँ। बिना सहमति नंबर कॉलर को नहीं दिखेगा।</span></label><button type="button" className={btnPrimary} disabled={contactSaving || !/^[6-9]\\d{9}$/.test(myMobile.replace(/\\D/g, ""))} onClick={() => void saveMyContact()}>{contactSaving ? "सेव हो रहा है..." : "सेव करें"}</button></Card>}\n      {canEdit && (ward > 0 ? <VoterCsvImport wardNumber={ward} onComplete={() => { setPage(0); void loadVoters(); }} /> : <Card className="mb-4 border-dashed p-5"><p className="text-sm text-muted-foreground">CSV अपलोड करने के लिए पहले ऊपर से एक वार्ड चुनें।</p></Card>)}
+      {isVoter && <Card className="mb-4 p-4"><h2 className="mb-3 text-lg font-bold">मेरा मोबाइल नंबर और संपर्क सहमति</h2><p className="mb-3 text-sm text-muted-foreground">अपना मोबाइल नंबर और इवेंट/कार्यक्रम के संबंध में संपर्क की सहमति स्वयं अपडेट करें। सहमति हटाने पर आपका नंबर कॉलर को नहीं दिखेगा।</p><label className="mb-3 block text-sm font-medium">मोबाइल नंबर<input className={inputCls + " mt-1"} type="tel" inputMode="numeric" maxLength={10} value={myMobile} onChange={(e) => setMyMobile(e.target.value.replace(/\\D/g, "").slice(0,10))} placeholder="10 अंकों का मोबाइल नंबर"/></label><label className="mb-4 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={myContactConsent} onChange={(e) => setMyContactConsent(e.target.checked)}/><span>मैं इवेंट/कार्यक्रम के संबंध में इस मोबाइल नंबर पर संपर्क करने की स्पष्ट सहमति देता/देती हूँ। बिना सहमति नंबर कॉलर को नहीं दिखेगा।</span></label><button type="button" className={btnPrimary} disabled={contactSaving || !/^[6-9]\\d{9}$/.test(myMobile.replace(/\\D/g, ""))} onClick={() => void saveMyContact()}>{contactSaving ? "सेव हो रहा है..." : "सेव करें"}</button></Card>}
+      {canEdit && (ward > 0 ? <VoterCsvImport wardNumber={ward} onComplete={() => { setPage(0); void loadVoters(); }} /> : <Card className="mb-4 border-dashed p-5"><p className="text-sm text-muted-foreground">CSV अपलोड करने के लिए पहले ऊपर से एक वार्ड चुनें।</p></Card>)}
 
       <Card>
         <div className="border-b p-4">

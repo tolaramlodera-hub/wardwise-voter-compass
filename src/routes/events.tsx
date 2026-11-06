@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CalendarDays, Check, Clock3, LoaderCircle, Phone, Plus, RefreshCw, ShieldCheck, Users } from "lucide-react";
+import { CalendarDays, Check, Phone, Plus, RefreshCw, Users } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell, Card, btnPrimary, btnOutline, inputCls } from "@/components/AppShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -19,7 +19,7 @@ function Events() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [selected, setSelected] = useState("");
   const [households, setHouseholds] = useState<Household[]>([]);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);\n  const [memberEventIds, setMemberEventIds] = useState<string[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [claims, setClaims] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -35,7 +35,7 @@ function Events() {
     setUserId(auth.user.id);
     const { data: p } = await supabase.from("profiles").select("role").eq("user_id", auth.user.id).maybeSingle();
     setRole(p?.role ?? "staff");
-    const { data, error } = await supabase.from("community_events").select("*").order("created_at", { ascending: false });
+    const { data: memberships } = await supabase.from("event_members").select("event_id").eq("user_id", auth.user.id).eq("is_active", true);\n    setMemberEventIds((memberships ?? []).map((m) => m.event_id));\n    const { data, error } = await supabase.from("community_events").select("*").order("created_at", { ascending: false });
     if (error) { toast.error("इवेंट सूची लोड नहीं हुई: " + error.message); return; }
     setEvents((data ?? []) as EventRow[]);
     const { data: people } = await supabase.from("profiles").select("user_id,full_name,role").eq("is_active", true).order("full_name");
@@ -173,7 +173,7 @@ function Events() {
               {role === "admin" && selectedEvent.status === "pending" && <div className="flex gap-2"><button disabled={busy} className={btnPrimary} onClick={() => void reviewEvent(selectedEvent,"approved")}><Check className="h-4 w-4"/>स्वीकृत</button><button disabled={busy} className={btnOutline} onClick={() => void reviewEvent(selectedEvent,"rejected")}>अस्वीकृत</button></div>}
             </div>
             {selectedEvent.status === "approved" && (role === "admin" || selectedEvent.organizer_id === userId) && <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
-              <button disabled={busy} className={btnOutline} onClick={() => void generateHouseholds(selectedEvent)}><RefreshCw className="h-4 w-4"/>मतदाता सूची से घर तैयार करें</button>
+              {role === "admin" && <button disabled={busy} className={btnOutline} onClick={() => void generateHouseholds(selectedEvent)}><RefreshCw className="h-4 w-4"/>मतदाता सूची से घर तैयार करें</button>}
               <select className={inputCls + " max-w-xs"} value={teamUser} onChange={(e) => setTeamUser(e.target.value)}><option value="">कॉलर चुनें</option>{profiles.filter((p) => p.user_id !== userId).map((p) => <option key={p.user_id} value={p.user_id}>{p.full_name} ({p.role})</option>)}</select>
               <button disabled={busy || !teamUser} className={btnPrimary} onClick={() => void appointMember()}><Users className="h-4 w-4"/>टीम में जोड़ें</button>
             </div>}

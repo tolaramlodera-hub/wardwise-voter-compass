@@ -8,7 +8,8 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 type EventRow = { id: string; name: string; purpose: string; event_at: string; place: string; details: string; created_by: string; organizer_id: string | null; status: string };
 type Household = { id: string; ward_id: string; house_number: string; household_label: string; voter_ids: string[]; status: string };
 type Profile = { user_id: string; full_name: string; role: string };
-type Contact = { voter_id: string; phone: string };\ntype Voter = { id: string; voter_id: string | null; full_name: string; relative_name: string | null; house_number: string | null; ward_id: string };
+type Contact = { voter_id: string; phone: string };
+type Voter = { id: string; voter_id: string | null; full_name: string; relative_name: string | null; house_number: string | null; ward_id: string };
 const eventStatusLabels: Record<string, string> = { pending: "अनुमोदन लंबित", approved: "स्वीकृत", rejected: "अस्वीकृत", closed: "बंद" };
 
 export const Route = createFileRoute("/events")({ head: () => ({ meta: [{ title: "इवेंट एवं संपर्क प्रबंधन" }] }), component: Events });
@@ -22,7 +23,17 @@ function Events() {
   const [households, setHouseholds] = useState<Household[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [memberEventIds, setMemberEventIds] = useState<string[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);\n  const [voterDetails, setVoterDetails] = useState<Voter[]>([]);\n  const [allVoters, setAllVoters] = useState<Voter[]>([]);\n  const [contactSearch, setContactSearch] = useState("");\n  const [contactVoterId, setContactVoterId] = useState("");\n  const [contactPhone, setContactPhone] = useState("");\n  const [contactConsent, setContactConsent] = useState(false);\n  const [splitHouse, setSplitHouse] = useState<Household | null>(null);\n  const [splitSelected, setSplitSelected] = useState<string[]>([]);\n  const [splitLabel, setSplitLabel] = useState("");\n  const [callRecords, setCallRecords] = useState<{caller_id:string;outcome:string;created_at:string;household_id:string}[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [voterDetails, setVoterDetails] = useState<Voter[]>([]);
+  const [allVoters, setAllVoters] = useState<Voter[]>([]);
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactVoterId, setContactVoterId] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactConsent, setContactConsent] = useState(false);
+  const [splitHouse, setSplitHouse] = useState<Household | null>(null);
+  const [splitSelected, setSplitSelected] = useState<string[]>([]);
+  const [splitLabel, setSplitLabel] = useState("");
+  const [callRecords, setCallRecords] = useState<{caller_id:string;outcome:string;created_at:string;household_id:string}[]>([]);
   const [claims, setClaims] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [claimed, setClaimed] = useState<Household | null>(null);
@@ -43,7 +54,11 @@ function Events() {
     if (error) { toast.error("इवेंट सूची लोड नहीं हुई: " + error.message); return; }
     setEvents((data ?? []) as EventRow[]);
     const { data: people } = await supabase.from("profiles").select("user_id,full_name,role").eq("is_active", true).order("full_name");
-    setProfiles((people ?? []) as Profile[]);\n    if (p?.role === "admin") {\n      const { data: voters } = await supabase.from("voters").select("id,voter_id,full_name,relative_name,house_number,ward_id").order("full_name").limit(2500);\n      setAllVoters((voters ?? []) as Voter[]);\n    }
+    setProfiles((people ?? []) as Profile[]);
+    if (p?.role === "admin") {
+      const { data: voters } = await supabase.from("voters").select("id,voter_id,full_name,relative_name,house_number,ward_id").order("full_name").limit(2500);
+      setAllVoters((voters ?? []) as Voter[]);
+    }
   };
 
   const loadHouseholds = async (eventId: string) => {
@@ -237,7 +252,8 @@ function Events() {
       <p className="text-sm text-muted-foreground">इवेंट अनुमोदन, टीम नियुक्ति और साझा लाइव कॉलिंग सूची</p>
       <button className={btnPrimary} onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> नया इवेंट अनुरोध</button>
     </div>
-    {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-3 font-bold">मतदाता मोबाइल नंबर और संपर्क सहमति</h2><div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"><input className={inputCls} value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} placeholder="मतदाता नाम / पहचान संख्या खोजें"/><select className={inputCls} value={contactVoterId} onChange={(e) => { setContactVoterId(e.target.value); const found = contacts.find((x) => x.voter_id === e.target.value); setContactPhone(found?.phone ?? ""); setContactConsent(Boolean(found)); }}><option value="">मतदाता चुनें</option>{allVoters.filter((v) => !contactSearch || (v.full_name + " " + (v.voter_id ?? "")).toLowerCase().includes(contactSearch.toLowerCase())).slice(0,100).map((v) => <option key={v.id} value={v.id}>{v.full_name} · {v.voter_id ?? "ID नहीं"} · मकान {v.house_number ?? "-"}</option>)}</select><input className={inputCls} value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="मोबाइल नंबर" type="tel"/><button className={btnPrimary} disabled={busy || !contactVoterId} onClick={() => void saveContact()}>सेव करें</button></div><label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" checked={contactConsent} onChange={(e) => setContactConsent(e.target.checked)} className="mt-1"/>मतदाता ने इवेंट के संबंध में संपर्क करने की स्पष्ट सहमति दी है। बिना सहमति नंबर कॉलर को नहीं दिखेगा।</label></Card>}\n    <div className="grid gap-4 lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.5fr)]">
+    {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-3 font-bold">मतदाता मोबाइल नंबर और संपर्क सहमति</h2><div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"><input className={inputCls} value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} placeholder="मतदाता नाम / पहचान संख्या खोजें"/><select className={inputCls} value={contactVoterId} onChange={(e) => { setContactVoterId(e.target.value); const found = contacts.find((x) => x.voter_id === e.target.value); setContactPhone(found?.phone ?? ""); setContactConsent(Boolean(found)); }}><option value="">मतदाता चुनें</option>{allVoters.filter((v) => !contactSearch || (v.full_name + " " + (v.voter_id ?? "")).toLowerCase().includes(contactSearch.toLowerCase())).slice(0,100).map((v) => <option key={v.id} value={v.id}>{v.full_name} · {v.voter_id ?? "ID नहीं"} · मकान {v.house_number ?? "-"}</option>)}</select><input className={inputCls} value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="मोबाइल नंबर" type="tel"/><button className={btnPrimary} disabled={busy || !contactVoterId} onClick={() => void saveContact()}>सेव करें</button></div><label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" checked={contactConsent} onChange={(e) => setContactConsent(e.target.checked)} className="mt-1"/>मतदाता ने इवेंट के संबंध में संपर्क करने की स्पष्ट सहमति दी है। बिना सहमति नंबर कॉलर को नहीं दिखेगा।</label></Card>}
+    <div className="grid gap-4 lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.5fr)]">
       <Card className="p-4">
         <h2 className="mb-3 flex items-center gap-2 font-bold"><CalendarDays className="h-5 w-5" /> इवेंट सूची</h2>
         <div className="space-y-2">

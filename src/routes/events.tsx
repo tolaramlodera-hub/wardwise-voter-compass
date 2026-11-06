@@ -11,6 +11,7 @@ type Profile = { user_id: string; full_name: string; role: string };
 type Contact = { voter_id: string; phone: string };
 type SavedContact = { voter_id: string; phone: string; consent_to_event_contact: boolean };
 type Voter = { id: string; voter_id: string | null; full_name: string; relative_name: string | null; house_number: string | null; ward_id: string };
+type PendingVoterAccount = { user_id: string; full_name: string; voter_account_links: { voters: { full_name: string; voter_id: string | null; house_number: string | null } | null }[] };
 const eventStatusLabels: Record<string, string> = { pending: "अनुमोदन लंबित", approved: "स्वीकृत", rejected: "अस्वीकृत", closed: "बंद" };
 
 export const Route = createFileRoute("/events")({ head: () => ({ meta: [{ title: "इवेंट एवं संपर्क प्रबंधन" }] }), component: Events });
@@ -28,6 +29,7 @@ function Events() {
   const [savedContacts, setSavedContacts] = useState<SavedContact[]>([]);
   const [voterDetails, setVoterDetails] = useState<Voter[]>([]);
   const [allVoters, setAllVoters] = useState<Voter[]>([]);
+  const [pendingVoterAccounts, setPendingVoterAccounts] = useState<PendingVoterAccount[]>([]);
   const [contactSearch, setContactSearch] = useState("");
   const [contactVoterId, setContactVoterId] = useState("");
   const [contactPhone, setContactPhone] = useState("");

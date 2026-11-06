@@ -67,6 +67,10 @@ function Voters() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
+  const [isVoter, setIsVoter] = useState(false);
+  const [myMobile, setMyMobile] = useState("");
+  const [myContactConsent, setMyContactConsent] = useState(false);
+  const [contactSaving, setContactSaving] = useState(false);
   const [editing, setEditing] = useState<EditForm | null>(null);
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
 
@@ -139,7 +143,19 @@ function Voters() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data: profile } = await supabase.from("profiles").select("role,is_active").eq("user_id", user.id).maybeSingle();
-      if (active) setCanEdit(profile?.role === "admin" && profile.is_active === true);
+      if (active) {
+        setCanEdit(profile?.role === "admin" && profile.is_active === true);
+        setIsVoter(profile?.role === "voter" && profile.is_active === true);
+      }
+      if (profile?.role === "voter" && profile.is_active === true) {
+        const { data: contact, error: contactError } = await supabase.rpc("get_my_voter_contact");
+        if (contactError) toast.error("मोबाइल विवरण लोड नहीं हुआ: " + contactError.message);
+        const row = Array.isArray(contact) ? contact[0] : contact;
+        if (active && row) {
+          setMyMobile(row.phone ?? "");
+          setMyContactConsent(Boolean(row.consent_to_event_contact));
+        }
+      }
     };
     void init().catch((error) => toast.error(error instanceof Error ? error.message : "यूजर जाँच नहीं हुई"));
     return () => { active = false; };
@@ -152,7 +168,7 @@ function Voters() {
 
   useEffect(() => { void loadVoters(); }, [loadVoters]);
 
-  const list = voters;
+  const list = voters;\n\n  const saveMyContact = async () => {\n    const phone = myMobile.replace(/\\D/g, "");\n    if (!/^[6-9]\\d{9}$/.test(phone)) { toast.error("सही 10 अंकों का मोबाइल नंबर भरें"); return; }\n    setContactSaving(true);\n    const { error } = await supabase.rpc("update_my_voter_contact", { p_phone: phone, p_consent_to_event_contact: myContactConsent });\n    setContactSaving(false);\n    if (error) toast.error("मोबाइल नंबर/सहमति सेव नहीं हुई: " + error.message);\n    else toast.success("आपका मोबाइल नंबर और संपर्क सहमति अपडेट हो गई");\n  };
 
   const openFamily = (group: HouseholdGroup) => {
     setFamilyOpen(group);
@@ -222,7 +238,7 @@ function Voters() {
 
   return (
     <AppShell title="मतदाता सूची">
-      {canEdit && (ward > 0 ? <VoterCsvImport wardNumber={ward} onComplete={() => { setPage(0); void loadVoters(); }} /> : <Card className="mb-4 border-dashed p-5"><p className="text-sm text-muted-foreground">CSV अपलोड करने के लिए पहले ऊपर से एक वार्ड चुनें।</p></Card>)}
+      {isVoter && <Card className="mb-4 p-4"><h2 className="mb-3 text-lg font-bold">मेरा मोबाइल नंबर और संपर्क सहमति</h2><p className="mb-3 text-sm text-muted-foreground">अपना मोबाइल नंबर और इवेंट/कार्यक्रम के संबंध में संपर्क की सहमति स्वयं अपडेट करें। सहमति हटाने पर आपका नंबर कॉलर को नहीं दिखेगा।</p><label className="mb-3 block text-sm font-medium">मोबाइल नंबर<input className={inputCls + " mt-1"} type="tel" inputMode="numeric" maxLength={10} value={myMobile} onChange={(e) => setMyMobile(e.target.value.replace(/\\D/g, "").slice(0,10))} placeholder="10 अंकों का मोबाइल नंबर"/></label><label className="mb-4 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={myContactConsent} onChange={(e) => setMyContactConsent(e.target.checked)}/><span>मैं इवेंट/कार्यक्रम के संबंध में इस मोबाइल नंबर पर संपर्क करने की स्पष्ट सहमति देता/देती हूँ। बिना सहमति नंबर कॉलर को नहीं दिखेगा।</span></label><button type="button" className={btnPrimary} disabled={contactSaving || !/^[6-9]\\d{9}$/.test(myMobile.replace(/\\D/g, ""))} onClick={() => void saveMyContact()}>{contactSaving ? "सेव हो रहा है..." : "सेव करें"}</button></Card>}\n      {canEdit && (ward > 0 ? <VoterCsvImport wardNumber={ward} onComplete={() => { setPage(0); void loadVoters(); }} /> : <Card className="mb-4 border-dashed p-5"><p className="text-sm text-muted-foreground">CSV अपलोड करने के लिए पहले ऊपर से एक वार्ड चुनें।</p></Card>)}
 
       <Card>
         <div className="border-b p-4">

@@ -65,7 +65,8 @@ function Events() {
     const { data, error } = await supabase.from("community_events").select("*").order("created_at", { ascending: false });
     if (error) { toast.error("इवेंट सूची लोड नहीं हुई: " + error.message); return; }
     setEvents((data ?? []) as EventRow[]);
-    const { data: people } = await supabase.from("profiles").select("user_id,full_name,role").eq("is_active", true).order("full_name");
+    const { data: people, error: peopleError } = await supabase.rpc("list_event_callers");
+    if (peopleError) toast.error("कॉलर सूची लोड नहीं हुई: " + peopleError.message);
     setProfiles((people ?? []) as Profile[]);
     if (p?.role === "admin") {
       const [{ data: voters }, { data: savedContacts }, { data: pendingAccounts }, { data: wardRows }, { data: pendingContacts }] = await Promise.all([

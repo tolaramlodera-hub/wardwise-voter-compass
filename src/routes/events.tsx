@@ -32,6 +32,7 @@ function Events() {
   const [accountWards, setAccountWards] = useState<WardOption[]>([]);
   const [householdWardSelection, setHouseholdWardSelection] = useState<string[]>([]);
   const [callingWardId, setCallingWardId] = useState("all");
+  const [callingWardSelection, setCallingWardSelection] = useState<string[]>([]);
   const [pendingLinkWard, setPendingLinkWard] = useState<Record<string, string>>({});
   const [pendingVoterAccounts, setPendingVoterAccounts] = useState<PendingVoterAccount[]>([]);
   const [pendingContactSubmissions, setPendingContactSubmissions] = useState<PendingContactSubmission[]>([]);
@@ -260,7 +261,7 @@ function Events() {
     else { toast.success("इवेंट बंद कर दिया गया"); await load(); }
   };
 
-  const callingHouseholds = households.filter((h) => callingWardId === "all" || h.ward_id === callingWardId);
+  const callingHouseholds = households.filter((h) => callingWardSelection.length === 0 || callingWardSelection.includes(h.ward_id));
   const exportReport = () => {
     const rows = [["घर नंबर","परिवार","स्थिति","मतदाता संख्या","कॉल करने वाला","परिणाम","समय"]];
     for (const h of callingHouseholds) {
@@ -344,7 +345,7 @@ function Events() {
           </Card>
           {selectedEvent.status === "approved" && <Card className="p-4">
             <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">कुल घर</div><b>{callingHouseholds.length}</b></div><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">लंबित</div><b>{callingHouseholds.filter((h) => h.status === "pending").length}</b></div><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">दोबारा कॉल</div><b>{callingHouseholds.filter((h) => h.status === "retry").length}</b></div><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">पूरे</div><b>{callingHouseholds.filter((h) => h.status === "completed").length}</b></div></div>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold">साझा कॉलिंग सूची</h3><div className="flex flex-wrap gap-2"><select aria-label="वार्ड चुनें" className="h-9 rounded-lg border bg-card px-2 text-sm" value={callingWardId} onChange={(e) => setCallingWardId(e.target.value)}><option value="all">सभी वार्ड</option>{accountWards.map((w) => <option key={w.id} value={w.id}>{w.name || `वार्ड ${w.ward_number}`}</option>)}</select><button className={btnOutline} onClick={exportReport}>Excel के लिए CSV रिपोर्ट</button><select className="h-9 rounded-lg border bg-card px-2 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="pending">बाकी घर</option><option value="retry">दोबारा कॉल</option><option value="completed">पूरे</option><option value="needs_correction">नंबर सुधार</option></select><button className={btnOutline} onClick={() => void loadHouseholds(selected)}><RefreshCw className="h-4 w-4"/>रीफ्रेश</button></div></div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold">साझा कॉलिंग सूची</h3><div className="flex flex-wrap gap-2"><div className="flex flex-wrap gap-2" aria-label="कॉलिंग सूची के वार्ड चुनें"><button type="button" className={callingWardSelection.length === 0 ? btnPrimary : btnOutline} onClick={() => setCallingWardSelection([])}>सभी वार्ड</button>{accountWards.map((w) => <button type="button" key={w.id} className={callingWardSelection.includes(w.id) ? btnPrimary : btnOutline} onClick={() => setCallingWardSelection((old) => old.includes(w.id) ? old.filter((id) => id !== w.id) : [...old, w.id])}>वार्ड {w.ward_number}{w.ward_number === 1 ? " · लोडेरां" : ""}</button>)}</div><button className={btnOutline} onClick={exportReport}>Excel के लिए CSV रिपोर्ट</button><select className="h-9 rounded-lg border bg-card px-2 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="pending">बाकी घर</option><option value="retry">दोबारा कॉल</option><option value="completed">पूरे</option><option value="needs_correction">नंबर सुधार</option></select><button className={btnOutline} onClick={() => void loadHouseholds(selected)}><RefreshCw className="h-4 w-4"/>रीफ्रेश</button></div></div>
             {claimed ? <div className="rounded-xl border border-primary p-4">
               <div className="mb-2 font-bold">घर नं. {claimed.house_number} {claimed.household_label && "· " + claimed.household_label} — कॉल जारी</div>
               <div className="mb-3 space-y-2">{claimed.voter_ids.map((id) => {

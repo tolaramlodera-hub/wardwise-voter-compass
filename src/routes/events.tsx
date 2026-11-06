@@ -8,7 +8,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 type EventRow = { id: string; name: string; purpose: string; event_at: string; place: string; details: string; created_by: string; organizer_id: string | null; status: string };
 type Household = { id: string; ward_id: string; house_number: string; household_label: string; voter_ids: string[]; status: string };
 type Profile = { user_id: string; full_name: string; role: string };
-type Contact = { voter_id: string; phone: string };
+type Contact = { voter_id: string; phone: string };\ntype Voter = { id: string; voter_id: string | null; full_name: string; relative_name: string | null; house_number: string | null; ward_id: string };
 const eventStatusLabels: Record<string, string> = { pending: "अनुमोदन लंबित", approved: "स्वीकृत", rejected: "अस्वीकृत", closed: "बंद" };
 
 export const Route = createFileRoute("/events")({ head: () => ({ meta: [{ title: "इवेंट एवं संपर्क प्रबंधन" }] }), component: Events });
@@ -22,7 +22,7 @@ function Events() {
   const [households, setHouseholds] = useState<Household[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [memberEventIds, setMemberEventIds] = useState<string[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);\n  const [voterDetails, setVoterDetails] = useState<Voter[]>([]);\n  const [allVoters, setAllVoters] = useState<Voter[]>([]);\n  const [contactSearch, setContactSearch] = useState("");\n  const [contactVoterId, setContactVoterId] = useState("");\n  const [contactPhone, setContactPhone] = useState("");\n  const [contactConsent, setContactConsent] = useState(false);\n  const [splitHouse, setSplitHouse] = useState<Household | null>(null);\n  const [splitSelected, setSplitSelected] = useState<string[]>([]);\n  const [splitLabel, setSplitLabel] = useState("");\n  const [callRecords, setCallRecords] = useState<{caller_id:string;outcome:string;created_at:string;household_id:string}[]>([]);
   const [claims, setClaims] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [claimed, setClaimed] = useState<Household | null>(null);
@@ -43,7 +43,7 @@ function Events() {
     if (error) { toast.error("इवेंट सूची लोड नहीं हुई: " + error.message); return; }
     setEvents((data ?? []) as EventRow[]);
     const { data: people } = await supabase.from("profiles").select("user_id,full_name,role").eq("is_active", true).order("full_name");
-    setProfiles((people ?? []) as Profile[]);
+    setProfiles((people ?? []) as Profile[]);\n    if (p?.role === "admin") {\n      const { data: voters } = await supabase.from("voters").select("id,voter_id,full_name,relative_name,house_number,ward_id").order("full_name").limit(2500);\n      setAllVoters((voters ?? []) as Voter[]);\n    }
   };
 
   const loadHouseholds = async (eventId: string) => {
@@ -57,11 +57,11 @@ function Events() {
         supabase.from("voter_contacts").select("voter_id,phone").in("voter_id", ids).eq("consent_to_event_contact", true),
         supabase.from("event_call_claims").select("household_id,caller_id,expires_at").in("household_id", rows.map((h) => h.id)).gt("expires_at", new Date().toISOString()),
       ]);
-      setContacts((phoneRows ?? []) as Contact[]);
+      setContacts((phoneRows ?? []) as Contact[]);\n      setVoterDetails((voterRows ?? []) as Voter[]);\n      setCallRecords((recordRows ?? []) as typeof callRecords);
       const next: Record<string, string> = {};
       for (const c of claimRows ?? []) if (c.caller_id !== userId) next[c.household_id] = c.caller_id;
       setClaims(next);
-    } else { setContacts([]); setClaims({}); }
+    } else { setContacts([]); setVoterDetails([]); setClaims({}); setCallRecords([]); }
   };
 
   useEffect(() => { void load(); }, []);
@@ -159,9 +159,74 @@ function Events() {
     else { toast.success(outcome === "contacted" ? "संपर्क पूरा — सभी सदस्यों की सूची से हटाया गया" : "कॉल परिणाम सेव हुआ"); setClaimed(null); setNotes(""); await loadHouseholds(selected); }
   };
 
+  const saveContact = async () => {
+    if (!contactVoterId || !contactPhone.trim()) { toast.error("मतदाता और मोबाइल नंबर भरें"); return; }
+    setBusy(true);
+    const { error } = await supabase.from("voter_contacts").upsert({
+      voter_id: contactVoterId, phone: contactPhone.trim(), consent_to_event_contact: contactConsent,
+      consent_recorded_at: contactConsent ? new Date().toISOString() : null, updated_by: userId, updated_at: new Date().toISOString(),
+    }, { onConflict: "voter_id" });
+    setBusy(false);
+    if (error) toast.error("मोबाइल नंबर सेव नहीं हुआ: " + error.message);
+    else {
+      toast.success("मोबाइल नंबर और सहमति सेव हुई");
+      setContactVoterId(""); setContactPhone(""); setContactConsent(false);
+      if (selected) await loadHouseholds(selected);
+    }
+  };
+
+  const splitFamily = async () => {
+    if (!splitHouse || !splitSelected.length || !splitLabel.trim()) { toast.error("अलग परिवार का नाम और सदस्य चुनें"); return; }
+    if (splitSelected.length >= splitHouse.voter_ids.length) { toast.error("कम से कम एक सदस्य पुराने परिवार में छोड़ें"); return; }
+    setBusy(true);
+    const remaining = splitHouse.voter_ids.filter((id) => !splitSelected.includes(id));
+    const { error: insertError } = await supabase.from("event_households").insert({
+      event_id: selected, ward_id: splitHouse.ward_id, house_number: splitHouse.house_number,
+      household_label: splitLabel.trim(), voter_ids: splitSelected, status: "pending",
+    });
+    if (!insertError) {
+      const { error: updateError } = await supabase.from("event_households").update({ voter_ids: remaining }).eq("id", splitHouse.id);
+      if (updateError) toast.error("नया परिवार बना, लेकिन पुराने परिवार की सूची अपडेट नहीं हुई: " + updateError.message);
+    }
+    setBusy(false);
+    if (insertError) toast.error("परिवार अलग नहीं हुआ: " + insertError.message);
+    else { toast.success("एक ही मकान के अलग परिवार बना दिए गए"); setSplitHouse(null); setSplitSelected([]); setSplitLabel(""); await loadHouseholds(selected); }
+  };
+
+  const correctHousehold = async (h: Household, status: "pending" | "completed" | "retry") => {
+    const reason = window.prompt("सुधार का कारण लिखें:");
+    if (!reason?.trim()) return;
+    setBusy(true);
+    const { error } = await supabase.rpc("correct_event_household_status", { p_household_id: h.id, p_status: status, p_reason: reason.trim() });
+    setBusy(false);
+    if (error) toast.error("स्थिति सुधार नहीं हुई: " + error.message);
+    else { toast.success("स्थिति सुधार दी गई और इतिहास सुरक्षित है"); await loadHouseholds(selected); }
+  };
+
+  const closeEvent = async (ev: EventRow) => {
+    if (!window.confirm("इवेंट बंद करें? कॉलिंग बंद होगी और पुराना रिकॉर्ड सुरक्षित रहेगा।")) return;
+    setBusy(true);
+    const { error } = await supabase.from("community_events").update({ status: "closed" }).eq("id", ev.id);
+    setBusy(false);
+    if (error) toast.error("इवेंट बंद नहीं हुआ: " + error.message);
+    else { toast.success("इवेंट बंद कर दिया गया"); await load(); }
+  };
+
+  const exportReport = () => {
+    const rows = [["घर नंबर","परिवार","स्थिति","मतदाता संख्या","कॉल करने वाला","परिणाम","समय"]];
+    for (const h of households) {
+      const history = callRecords.filter((r) => r.household_id === h.id);
+      if (!history.length) rows.push([h.house_number,h.household_label,h.status,String(h.voter_ids.length),"","",""]);
+      else for (const r of history) rows.push([h.house_number,h.household_label,h.status,String(h.voter_ids.length),profiles.find((p) => p.user_id === r.caller_id)?.full_name ?? r.caller_id,r.outcome,new Date(r.created_at).toLocaleString("hi-IN")]);
+    }
+    const csv = rows.map((row) => row.map((v) => '"' + String(v ?? "").replaceAll('"','""') + '"').join(",")).join("\\n");
+    const url = URL.createObjectURL(new Blob(["\\uFEFF" + csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = "event-calling-" + selected + ".csv"; a.click(); URL.revokeObjectURL(url);
+  };
+
   const selectedEvent = events.find((e) => e.id === selected);
   const ownOrAssigned = events.filter((e) => role === "admin" || e.created_by === userId || e.organizer_id === userId);
-  const callerEvents = events.filter((e) => e.status === "approved" && (e.organizer_id === userId || e.created_by === userId));
+  const callerEvents = events.filter((e) => e.status === "approved" && (e.organizer_id === userId || e.created_by === userId || memberEventIds.includes(e.id)));
   const visibleEvents = role === "admin" ? events : [...new Map([...ownOrAssigned, ...callerEvents].map((e) => [e.id, e])).values()];
 
   return <AppShell title="इवेंट एवं संपर्क प्रबंधन">
@@ -169,7 +234,7 @@ function Events() {
       <p className="text-sm text-muted-foreground">इवेंट अनुमोदन, टीम नियुक्ति और साझा लाइव कॉलिंग सूची</p>
       <button className={btnPrimary} onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> नया इवेंट अनुरोध</button>
     </div>
-    <div className="grid gap-4 lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.5fr)]">
+    {role === "admin" && <Card className="mb-4 p-4"><h2 className="mb-3 font-bold">मतदाता मोबाइल नंबर और संपर्क सहमति</h2><div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"><input className={inputCls} value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} placeholder="मतदाता नाम / पहचान संख्या खोजें"/><select className={inputCls} value={contactVoterId} onChange={(e) => { setContactVoterId(e.target.value); const found = contacts.find((x) => x.voter_id === e.target.value); setContactPhone(found?.phone ?? ""); setContactConsent(Boolean(found)); }}><option value="">मतदाता चुनें</option>{allVoters.filter((v) => !contactSearch || (v.full_name + " " + (v.voter_id ?? "")).toLowerCase().includes(contactSearch.toLowerCase())).slice(0,100).map((v) => <option key={v.id} value={v.id}>{v.full_name} · {v.voter_id ?? "ID नहीं"} · मकान {v.house_number ?? "-"}</option>)}</select><input className={inputCls} value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="मोबाइल नंबर" type="tel"/><button className={btnPrimary} disabled={busy || !contactVoterId} onClick={() => void saveContact()}>सेव करें</button></div><label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" checked={contactConsent} onChange={(e) => setContactConsent(e.target.checked)} className="mt-1"/>मतदाता ने इवेंट के संबंध में संपर्क करने की स्पष्ट सहमति दी है। बिना सहमति नंबर कॉलर को नहीं दिखेगा।</label></Card>}\n    <div className="grid gap-4 lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.5fr)]">
       <Card className="p-4">
         <h2 className="mb-3 flex items-center gap-2 font-bold"><CalendarDays className="h-5 w-5" /> इवेंट सूची</h2>
         <div className="space-y-2">
@@ -193,19 +258,19 @@ function Events() {
             </div>}
           </Card>
           {selectedEvent.status === "approved" && <Card className="p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold">साझा कॉलिंग सूची</h3><div className="flex gap-2"><select className="h-9 rounded-lg border bg-card px-2 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="pending">बाकी घर</option><option value="retry">दोबारा कॉल</option><option value="completed">पूरे</option><option value="needs_correction">नंबर सुधार</option></select><button className={btnOutline} onClick={() => void loadHouseholds(selected)}><RefreshCw className="h-4 w-4"/>रीफ्रेश</button></div></div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold">साझा कॉलिंग सूची</h3><div className="flex gap-2"><button className={btnOutline} onClick={exportReport}>Excel के लिए CSV रिपोर्ट</button><select className="h-9 rounded-lg border bg-card px-2 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="pending">बाकी घर</option><option value="retry">दोबारा कॉल</option><option value="completed">पूरे</option><option value="needs_correction">नंबर सुधार</option></select><button className={btnOutline} onClick={() => void loadHouseholds(selected)}><RefreshCw className="h-4 w-4"/>रीफ्रेश</button></div></div>
             {claimed ? <div className="rounded-xl border border-primary p-4">
-              <div className="mb-2 font-bold">घर नं. {claimed.house_number} — कॉल जारी</div>
+              <div className="mb-2 font-bold">घर नं. {claimed.house_number} {claimed.household_label && "· " + claimed.household_label} — कॉल जारी</div>
               <div className="mb-3 space-y-2">{claimed.voter_ids.map((id) => {
                 const c = contacts.find((x) => x.voter_id === id);
-                return <div key={id} className="flex items-center justify-between gap-2 text-sm"><span>मतदाता {id.slice(0,8)}</span>{c ? <a className="inline-flex items-center gap-1 font-semibold text-primary" href={"tel:" + c.phone}><Phone className="h-4 w-4"/>{c.phone}</a> : <span className="text-xs text-muted-foreground">सहमति वाला नंबर उपलब्ध नहीं</span>}</div>;
+                return <div key={id} className="flex items-center justify-between gap-2 text-sm"><span>{voterDetails.find((v) => v.id === id)?.full_name ?? "मतदाता"} · {voterDetails.find((v) => v.id === id)?.voter_id ?? ""}</span>{c ? <a className="inline-flex items-center gap-1 font-semibold text-primary" href={"tel:" + c.phone}><Phone className="h-4 w-4"/>{c.phone}</a> : <span className="text-xs text-muted-foreground">सहमति वाला नंबर उपलब्ध नहीं</span>}</div>;
               })}</div>
               <textarea className={inputCls + " min-h-20 py-2"} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="कॉल नोट (वैकल्पिक)" />
               <div className="mt-3 flex flex-wrap gap-2">{([["contacted","बात हो गई"],["no_answer","फोन नहीं उठा"],["busy","व्यस्त"],["call_later","बाद में कॉल"],["invalid_number","गलत नंबर"]] as const).map(([v,l]) => <button key={v} disabled={busy} className={v==="contacted" ? btnPrimary : btnOutline} onClick={() => void submitCall(v)}>{l}</button>)}</div>
             </div> : <div className="max-h-[560px] space-y-2 overflow-y-auto">
               {households.filter((h) => h.status === filter).map((h) => <div key={h.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
-                <div><div className="font-semibold">वार्ड · घर नं. {h.house_number} {h.household_label && "· " + h.household_label}</div><div className="text-xs text-muted-foreground">{h.voter_ids.length} मतदाता · {h.status === "retry" ? "दोबारा कॉल" : h.status === "completed" ? "संपर्क पूरा" : h.status === "needs_correction" ? "नंबर सुधार" : "लंबित"}</div></div>
-                {h.status === "pending" || h.status === "retry" ? claims[h.id] ? <span className="text-xs text-warning">दूसरा सदस्य कॉल कर रहा है</span> : <button disabled={busy} className={btnPrimary} onClick={() => void claimHouse(h)}><Phone className="h-4 w-4"/>चुनें और कॉल करें</button> : null}
+                <div><div className="font-semibold">घर नं. {h.house_number} {h.household_label && "· " + h.household_label}</div><div className="text-xs text-muted-foreground">{h.voter_ids.map((id) => voterDetails.find((v) => v.id === id)?.full_name ?? "मतदाता").join(", ")} · {h.voter_ids.length} सदस्य</div><div className="text-xs text-muted-foreground">{h.status === "retry" ? "दोबारा कॉल" : h.status === "completed" ? "संपर्क पूरा" : h.status === "needs_correction" ? "नंबर सुधार" : "लंबित"}</div></div>
+                {h.status === "pending" || h.status === "retry" ? claims[h.id] ? <span className="text-xs text-warning">दूसरा सदस्य कॉल कर रहा है</span> : <button disabled={busy} className={btnPrimary} onClick={() => void claimHouse(h)}><Phone className="h-4 w-4"/>चुनें और कॉल करें</button> : null}{role === "admin" && <div className="flex flex-wrap gap-1"><button className={btnOutline} onClick={() => { setSplitHouse(h); setSplitSelected([]); }}>परिवार अलग करें</button><button className={btnOutline} onClick={() => void correctHousehold(h,"pending")}>पेंडिंग करें</button><button className={btnOutline} onClick={() => void correctHousehold(h,"completed")}>पूर्ण करें</button></div>}
               </div>)}
               {households.filter((h) => h.status === filter).length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">इस श्रेणी में घर नहीं हैं।</p>}
             </div>}

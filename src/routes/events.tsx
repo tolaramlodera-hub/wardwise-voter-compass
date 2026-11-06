@@ -211,6 +211,14 @@ function Events() {
     else { toast.success("एक ही मकान के अलग परिवार सुरक्षित रूप से बना दिए गए"); setSplitHouse(null); setSplitSelected([]); setSplitLabel(""); await loadHouseholds(selected); }
   };
 
+  const releaseClaim = async (householdId: string) => {
+    setBusy(true);
+    const { error } = await supabase.rpc("release_event_household_claim", { p_household_id: householdId });
+    setBusy(false);
+    if (error) toast.error("लॉक नहीं हटाया गया: " + error.message);
+    else { toast.success("कॉल लॉक हटा दिया गया"); await loadHouseholds(selected); }
+  };
+
   const correctHousehold = async (h: Household, status: "pending" | "completed" | "retry") => {
     const reason = window.prompt("सुधार का कारण लिखें:");
     if (!reason?.trim()) return;
@@ -289,7 +297,7 @@ function Events() {
             </div> : <div className="max-h-[560px] space-y-2 overflow-y-auto">
               {households.filter((h) => h.status === filter).map((h) => <div key={h.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
                 <div><div className="font-semibold">घर नं. {h.house_number} {h.household_label && "· " + h.household_label}</div><div className="text-xs text-muted-foreground">{h.voter_ids.map((id) => voterDetails.find((v) => v.id === id)?.full_name ?? "मतदाता").join(", ")} · {h.voter_ids.length} सदस्य</div><div className="text-xs text-muted-foreground">{h.status === "retry" ? "दोबारा कॉल" : h.status === "completed" ? "संपर्क पूरा" : h.status === "needs_correction" ? "नंबर सुधार" : "लंबित"}</div></div>
-                {h.status === "pending" || h.status === "retry" ? claims[h.id] ? <span className="text-xs text-warning">दूसरा सदस्य कॉल कर रहा है</span> : <button disabled={busy} className={btnPrimary} onClick={() => void claimHouse(h)}><Phone className="h-4 w-4"/>चुनें और कॉल करें</button> : null}{role === "admin" && <div className="flex flex-wrap gap-1"><button className={btnOutline} onClick={() => { setSplitHouse(h); setSplitSelected([]); }}>परिवार अलग करें</button><button className={btnOutline} onClick={() => void correctHousehold(h,"pending")}>पेंडिंग करें</button><button className={btnOutline} onClick={() => void correctHousehold(h,"completed")}>पूर्ण करें</button></div>}
+                {h.status === "pending" || h.status === "retry" ? claims[h.id] ? <span className="text-xs text-warning">दूसरा सदस्य कॉल कर रहा है</span> : <button disabled={busy} className={btnPrimary} onClick={() => void claimHouse(h)}><Phone className="h-4 w-4"/>चुनें और कॉल करें</button> : null}{role === "admin" && <div className="flex flex-wrap gap-1">{claims[h.id] && <button disabled={busy} className={btnOutline} onClick={() => void releaseClaim(h.id)}>लॉक हटाएँ</button>}<button className={btnOutline} onClick={() => { setSplitHouse(h); setSplitSelected([]); }}>परिवार अलग करें</button><button className={btnOutline} onClick={() => void correctHousehold(h,"pending")}>पेंडिंग करें</button><button className={btnOutline} onClick={() => void correctHousehold(h,"completed")}>पूर्ण करें</button></div>}
               </div>)}
               {households.filter((h) => h.status === filter).length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">इस श्रेणी में घर नहीं हैं।</p>}
             </div>}

@@ -292,6 +292,7 @@ function Events() {
               {households.filter((h) => h.status === filter).length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">इस श्रेणी में घर नहीं हैं।</p>}
             </div>}
           </Card>}
+          {role === "admin" && splitHouse && <Card className="p-4"><h3 className="font-bold">मकान नं. {splitHouse.house_number} में दूसरा परिवार अलग करें</h3><p className="my-2 text-xs text-muted-foreground">अलग परिवार के सदस्य चुनें। बाकी सदस्य पहले परिवार में रहेंगे।</p><input className={inputCls} value={splitLabel} onChange={(e) => setSplitLabel(e.target.value)} placeholder="परिवार का नाम / पहचान"/><div className="my-3 max-h-52 space-y-2 overflow-y-auto">{splitHouse.voter_ids.map((id) => { const v = voterDetails.find((x) => x.id === id); return <label key={id} className="flex items-center gap-2 rounded border p-2 text-sm"><input type="checkbox" checked={splitSelected.includes(id)} onChange={(e) => setSplitSelected((old) => e.target.checked ? [...old,id] : old.filter((x) => x !== id))}/>{v?.full_name ?? "मतदाता"} · {v?.voter_id ?? id}</label>; })}</div><div className="flex justify-end gap-2"><button className={btnOutline} onClick={() => setSplitHouse(null)}>रद्द</button><button disabled={busy || !splitSelected.length || !splitLabel.trim()} className={btnPrimary} onClick={() => void splitFamily()}>परिवार अलग सेव करें</button></div></Card>}
         </> : <Card className="p-8 text-center text-sm text-muted-foreground"><CalendarDays className="mx-auto mb-2 h-8 w-8"/>बाईं ओर से इवेंट चुनें।</Card>}
       </div>
     </div>

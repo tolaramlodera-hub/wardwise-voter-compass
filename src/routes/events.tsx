@@ -201,18 +201,12 @@ function Events() {
     if (!splitHouse || !splitSelected.length || !splitLabel.trim()) { toast.error("अलग परिवार का नाम और सदस्य चुनें"); return; }
     if (splitSelected.length >= splitHouse.voter_ids.length) { toast.error("कम से कम एक सदस्य पुराने परिवार में छोड़ें"); return; }
     setBusy(true);
-    const remaining = splitHouse.voter_ids.filter((id) => !splitSelected.includes(id));
-    const { error: insertError } = await supabase.from("event_households").insert({
-      event_id: selected, ward_id: splitHouse.ward_id, house_number: splitHouse.house_number,
-      household_label: splitLabel.trim(), voter_ids: splitSelected, status: "pending",
+    const { error: insertError } = await supabase.rpc("split_event_household", {
+      p_source_household: splitHouse.id, p_member_ids: splitSelected, p_family_label: splitLabel.trim(),
     });
-    if (!insertError) {
-      const { error: updateError } = await supabase.from("event_households").update({ voter_ids: remaining }).eq("id", splitHouse.id);
-      if (updateError) toast.error("नया परिवार बना, लेकिन पुराने परिवार की सूची अपडेट नहीं हुई: " + updateError.message);
-    }
     setBusy(false);
     if (insertError) toast.error("परिवार अलग नहीं हुआ: " + insertError.message);
-    else { toast.success("एक ही मकान के अलग परिवार बना दिए गए"); setSplitHouse(null); setSplitSelected([]); setSplitLabel(""); await loadHouseholds(selected); }
+    else { toast.success("एक ही मकान के अलग परिवार सुरक्षित रूप से बना दिए गए"); setSplitHouse(null); setSplitSelected([]); setSplitLabel(""); await loadHouseholds(selected); }
   };
 
   const correctHousehold = async (h: Household, status: "pending" | "completed" | "retry") => {

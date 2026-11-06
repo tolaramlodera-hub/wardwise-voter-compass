@@ -211,13 +211,7 @@ function Events() {
     const submission = pendingContactSubmissions.find((item) => item.user_id === account.user_id);
     if (!submission) { toast.error("मतदाता का मोबाइल नंबर रजिस्ट्रेशन में नहीं मिला। उससे दोबारा जानकारी भरवाएँ।"); return; }
     setBusy(true);
-    const contactRows = account.voter_account_links.map((link) => ({
-      voter_id: link.voters!.id, phone: submission.phone,
-      consent_to_event_contact: submission.consent_to_event_contact,
-      consent_recorded_at: submission.consent_to_event_contact ? submission.submitted_at : null,
-      updated_by: userId, updated_at: new Date().toISOString(),
-    }));
-    const { error: contactError } = await supabase.from("voter_contacts").upsert(contactRows, { onConflict: "voter_id" });
+    const { error: contactError } = await supabase.rpc("admin_save_pending_voter_contact", { p_user_id: account.user_id });
     if (contactError) { setBusy(false); toast.error("मोबाइल नंबर मतदाता रिकॉर्ड में सेव नहीं हुआ: " + contactError.message); return; }
     const { error } = await supabase.functions.invoke("admin-user-management", { body: { action: "toggle", user_id: account.user_id, is_active: true } });
     setBusy(false);

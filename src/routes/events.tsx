@@ -56,8 +56,12 @@ function Events() {
     const { data: people } = await supabase.from("profiles").select("user_id,full_name,role").eq("is_active", true).order("full_name");
     setProfiles((people ?? []) as Profile[]);
     if (p?.role === "admin") {
-      const { data: voters } = await supabase.from("voters").select("id,voter_id,full_name,relative_name,house_number,ward_id").order("full_name").limit(2500);
+      const [{ data: voters }, { data: savedContacts }] = await Promise.all([
+        supabase.from("voters").select("id,voter_id,full_name,relative_name,house_number,ward_id").order("full_name").limit(2500),
+        supabase.from("voter_contacts").select("voter_id,phone"),
+      ]);
       setAllVoters((voters ?? []) as Voter[]);
+      setContacts((savedContacts ?? []) as Contact[]);
     }
   };
 

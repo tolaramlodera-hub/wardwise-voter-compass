@@ -2,11 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Pencil, X, Save, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell, Card, WardSelect, inputCls, btnOutline, btnPrimary } from "@/components/AppShell";
+import { AppShell, Card, inputCls, btnOutline, btnPrimary } from "@/components/AppShell";
 import { VoterTable } from "@/components/VoterTable";
 import { VoterCsvImport } from "@/components/VoterCsvImport";
 import type { Voter } from "@/lib/mock-data";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+type WardOption = { id: string; ward_number: number; name: string; is_active: boolean };
 
 type VoterRow = {
   id: string;
@@ -45,6 +47,8 @@ export const Route = createFileRoute("/voters")({
 
 function Voters() {
   const [voters, setVoters] = useState<Voter[]>([]);
+  const [wards, setWards] = useState<WardOption[]>([]);
+  const [wardsLoading, setWardsLoading] = useState(true);
   const [ward, setWard] = useState(0);
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
@@ -68,6 +72,7 @@ function Voters() {
     if (term) {
       const clauses = [
         "full_name.ilike.%" + term + "%",
+        "relative_name.ilike.%" + term + "%",
         "voter_id.ilike.%" + term + "%",
         "house_number.ilike.%" + term + "%",
       ];
@@ -99,8 +104,15 @@ function Voters() {
   useEffect(() => {
     let active = true;
     const requestedWard = Number(new URLSearchParams(window.location.search).get("ward"));
-    if (Number.isInteger(requestedWard) && requestedWard >= 1 && requestedWard <= 7) setWard(requestedWard);
     const init = async () => {
+      const { data: wardRows, error: wardError } = await supabase.from("wards").select("id,ward_number,name,is_active").eq("is_active", true).order("ward_number");
+      if (wardError) toast.error("वार्ड सूची लोड नहीं हुई: " + wardError.message);
+      if (active) {
+        const availableWards = (wardRows ?? []) as WardOption[];
+        setWards(availableWards);
+        if (Number.isInteger(requestedWard) && availableWards.some((w) => w.ward_number === requestedWard)) setWard(requestedWard);
+      }
+      setWardsLoading(false);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data: profile } = await supabase.from("profiles").select("role,is_active").eq("user_id", user.id).maybeSingle();
@@ -159,11 +171,15 @@ function Voters() {
       {canEdit && (ward > 0 ? <VoterCsvImport wardNumber={ward} onComplete={() => { setPage(0); void loadVoters(); }} /> : <Card className="mb-4 border-dashed p-5"><p className="text-sm text-muted-foreground">CSV अपलोड करने के लिए पहले ऊपर से एक वार्ड चुनें।</p></Card>)}
 
       <Card>
-        <div className="flex flex-wrap gap-2 border-b p-4">
-          <WardSelect value={ward} onChange={(value) => { setWard(value); setPage(0); }} />
-          <div className="relative min-w-48 flex-1">
+        <div className="border-b p-4">
+          <div className="mb-3 flex flex-wrap gap-2" aria-label="वार्ड चुनें">
+            <button type="button" onClick={() => { setWard(0); setPage(0); }} className={"rounded-lg border px-4 py-2 text-sm font-semibold " + (ward === 0 ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted")}>सभी वार्ड</button>
+            {wards.map((w) => <button key={w.id} type="button" onClick={() => { setWard(w.ward_number); setPage(0); }} className={"rounded-lg border px-4 py-2 text-sm font-semibold " + (ward === w.ward_number ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted")}>{"वार्ड " + w.ward_number + (w.name ? " · " + w.name : "")}</button>)}
+          </div>
+          {wardsLoading && <p className="mb-2 text-xs text-muted-foreground">वार्ड लोड हो रहे हैं...</p>}
+          <div className="relative min-w-48">
             <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-            <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} className={inputCls + " pl-9"} placeholder="क्रमांक, नाम, वोटर ID या मकान नंबर" />
+            <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} className={inputCls + " pl-9"} placeholder="नाम, पिता/पति का नाम, वोटर ID या मकान नंबर खोजें" />
           </div>
         </div>
         <div className="px-4 py-2 text-xs text-muted-foreground">{loading ? "सूची लोड हो रही है..." : `कुल ${totalRows} मतदाता · ${Math.min(totalRows, page * pageSize + 1)}–${Math.min(totalRows, (page + 1) * pageSize)} दिख रहे हैं`}</div>

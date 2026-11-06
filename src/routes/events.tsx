@@ -92,11 +92,12 @@ function Events() {
   useEffect(() => {
     if (!selected) return;
     void loadHouseholds(selected);
+    const poll = window.setInterval(() => { void loadHouseholds(selected); }, 10000);
     const channel = supabase.channel("event-live-" + selected)
       .on("postgres_changes", { event: "*", schema: "public", table: "event_households", filter: "event_id=eq." + selected }, () => { void loadHouseholds(selected); })
       .on("postgres_changes", { event: "*", schema: "public", table: "event_call_claims" }, () => { void loadHouseholds(selected); })
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => { window.clearInterval(poll); void supabase.removeChannel(channel); };
   }, [selected, userId]);
 
   const createEvent = async (e: FormEvent<HTMLFormElement>) => {
@@ -193,6 +194,7 @@ function Events() {
     setBusy(false);
     if (error) toast.error("मोबाइल नंबर सेव नहीं हुआ: " + error.message);
     else {
+      setSavedContacts((old) => [...old.filter((x) => x.voter_id !== contactVoterId), { voter_id: contactVoterId, phone: contactPhone.trim(), consent_to_event_contact: contactConsent }]);
       toast.success("मोबाइल नंबर और सहमति सेव हुई");
       setContactVoterId(""); setContactPhone(""); setContactConsent(false);
       if (selected) await loadHouseholds(selected);
@@ -285,6 +287,7 @@ function Events() {
             </div>}
           </Card>
           {selectedEvent.status === "approved" && <Card className="p-4">
+            <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">कुल घर</div><b>{households.length}</b></div><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">लंबित</div><b>{households.filter((h) => h.status === "pending").length}</b></div><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">दोबारा कॉल</div><b>{households.filter((h) => h.status === "retry").length}</b></div><div className="rounded-lg bg-muted p-2 text-center"><div className="text-xs text-muted-foreground">पूरे</div><b>{households.filter((h) => h.status === "completed").length}</b></div></div>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold">साझा कॉलिंग सूची</h3><div className="flex gap-2"><button className={btnOutline} onClick={exportReport}>Excel के लिए CSV रिपोर्ट</button><select className="h-9 rounded-lg border bg-card px-2 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="pending">बाकी घर</option><option value="retry">दोबारा कॉल</option><option value="completed">पूरे</option><option value="needs_correction">नंबर सुधार</option></select><button className={btnOutline} onClick={() => void loadHouseholds(selected)}><RefreshCw className="h-4 w-4"/>रीफ्रेश</button></div></div>
             {claimed ? <div className="rounded-xl border border-primary p-4">
               <div className="mb-2 font-bold">घर नं. {claimed.house_number} {claimed.household_label && "· " + claimed.household_label} — कॉल जारी</div>

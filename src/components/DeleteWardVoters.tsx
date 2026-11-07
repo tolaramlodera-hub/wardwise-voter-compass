@@ -48,7 +48,18 @@ export function DeleteWardVoters({ wardNumber, onDeleted }: Props) {
     setBusy(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      // Delete is strictly scoped to this ward ID; other wards are never included.
+      // First remove attendance history linked to voters in this ward, then remove
+      // only these ward's voters. This satisfies attendance_voter_id_fkey.
+      const { data: wardVoters, error: voterListError } = await supabase
+        .from("voters").select("id").eq("ward_id", wardId);
+      if (voterListError) throw voterListError;
+      const voterIds = (wardVoters ?? []).map((voter) => voter.id);
+      for (let i = 0; i < voterIds.length; i += 100) {
+        const { error: attendanceDeleteError } = await supabase
+          .from("attendance").delete().in("voter_id", voterIds.slice(i, i + 100));
+        if (attendanceDeleteError) throw attendanceDeleteError;
+      }
+      // Ward scope remains explicit; other wards are never included.
       const { error } = await supabase.from("voters").delete().eq("ward_id", wardId);
       if (error) throw error;
       const { count: remaining, error: verifyError } = await supabase.from("voters").select("id", { count: "exact", head: true }).eq("ward_id", wardId);

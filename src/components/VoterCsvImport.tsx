@@ -90,6 +90,17 @@ export function VoterCsvImport({ wardNumber, onComplete }: Props) {
         serials.add(record.serial_no);
       }
 
+      // A voter ID is globally unique. Keep the first occurrence in this CSV
+      // and skip later repeats so one duplicate cannot fail an entire batch.
+      const seenCsvVoterIds = new Set<string>();
+      const duplicateCsvVoterIds = new Set<string>();
+      for (const { record } of raw) {
+        if (!record.voter_id) continue;
+        const normalizedId = record.voter_id.trim().toUpperCase();
+        if (seenCsvVoterIds.has(normalizedId)) duplicateCsvVoterIds.add(normalizedId);
+        else seenCsvVoterIds.add(normalizedId);
+      }
+
       const supabase = getSupabaseBrowserClient();
       const { data: ward, error: wardError } = await supabase.from("wards").select("id").eq("ward_number", wardNumber).single();
       if (wardError || !ward) throw new Error("वार्ड " + wardNumber + " नहीं मिला।");
@@ -101,11 +112,15 @@ export function VoterCsvImport({ wardNumber, onComplete }: Props) {
       if (idsError) throw new Error("मौजूदा वोटर ID जाँची नहीं जा सकीं: " + idsError.message);
       const { data: existingSerials, error: serialError } = await supabase.from("voters").select("serial_no").eq("ward_id", ward.id);
       if (serialError) throw new Error("वार्ड की मौजूदा क्रम संख्या जाँची नहीं जा सकीं: " + serialError.message);
-      const knownIds = new Set((existingIds ?? []).map((item) => item.voter_id));
+      const knownIds = new Set((existingIds ?? []).map((item) => (item.voter_id ?? "").trim().toUpperCase()));
       const knownSerials = new Set((existingSerials ?? []).map((item) => item.serial_no).filter((n): n is number => n !== null));
-      const fresh = records.filter((record) =>
-        (!record.voter_id || !knownIds.has(record.voter_id)) && !knownSerials.has(record.serial_no)
-      );
+      const seenDuringImport = new Set<string>();
+      const fresh = records.filter((record) => {
+        const normalizedId = (record.voter_id ?? "").trim().toUpperCase();
+        if (normalizedId && (knownIds.has(normalizedId) || seenDuringImport.has(normalizedId))) return false;
+        if (normalizedId) seenDuringImport.add(normalizedId);
+        return !knownSerials.has(record.serial_no);
+      });
       let inserted = 0;
       for (let i = 0; i < fresh.length; i += 100) {
         const batch = fresh.slice(i, i + 100);

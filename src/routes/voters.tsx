@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { AppShell, Card, WardSelect, inputCls, btnOutline, btnPrimary } from "@/components/AppShell";
 import { VoterTable } from "@/components/VoterTable";
 import { VoterCsvImport } from "@/components/VoterCsvImport";
+import { DeleteWardVoters } from "@/components/DeleteWardVoters";
 import type { Voter } from "@/lib/mock-data";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -156,7 +157,7 @@ function Voters() {
 
   return (
     <AppShell title="मतदाता सूची">
-      {canEdit && (ward > 0 ? <VoterCsvImport wardNumber={ward} onComplete={() => { setPage(0); void loadVoters(); }} /> : <Card className="mb-4 border-dashed p-5"><p className="text-sm text-muted-foreground">CSV अपलोड करने के लिए पहले ऊपर से एक वार्ड चुनें।</p></Card>)}
+      {canEdit && (ward > 0 ? <><VoterCsvImport wardNumber={ward} onComplete={() => { setPage(0); void loadVoters(); }} /><DeleteWardVoters wardNumber={ward} onDeleted={() => { setPage(0); setQ(""); setSearch(""); void loadVoters(); }} /></> : <Card className="mb-4 border-dashed p-5"><p className="text-sm text-muted-foreground">CSV अपलोड करने के लिए पहले ऊपर से एक वार्ड चुनें।</p></Card>)}
 
       <Card>
         <div className="flex flex-wrap gap-2 border-b p-4">

@@ -5,6 +5,7 @@ import { Card, btnOutline } from "@/components/AppShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Props = { wardNumber: number; onComplete: () => void };
+type SkippedRow = { rowNumber: number; name: string; voterId: string; reason: string };
 type ImportRow = {
   serial_no: number;
   voter_id: string | null;
@@ -41,6 +42,7 @@ function normalize(value: string) { return value.trim().toLowerCase().replace(/[
 export function VoterCsvImport({ wardNumber, onComplete }: Props) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ inserted: number; skipped: number } | null>(null);
+  const [skippedDetails, setSkippedDetails] = useState<SkippedRow[]>([]);
 
   const importFile = async (file: File) => {
     setResult(null);
@@ -57,7 +59,7 @@ export function VoterCsvImport({ wardNumber, onComplete }: Props) {
       const serialIdx = find("क्रम संख्या", "क्रमांक", "serial_no", "serial", "srno");
       const voterIdx = find("मतदाता पहचान पत्र संख्या", "मतदाता पहचान पत्र", "वोटर आईडी", "voter_id", "epicno", "epic");
       const nameIdx = find("मतदाता का नाम", "मतदाता नाम", "नाम", "full_name", "name");
-      const relativeIdx = find("पिता/पति/माता का नाम", "पिता का नाम", "पति का नाम", "relative_name", "father_name");
+      const relativeIdx = find("पिता/पति का नाम", "पिता/पति/माता का नाम", "पिता का नाम", "पति का नाम", "relative_name", "father_name");
       const ageIdx = find("आयु", "उम्र", "age");
       const genderIdx = find("लिंग", "gender", "sex");
       const houseIdx = find("मकान संख्या", "मकान नंबर", "house_number", "house");
@@ -95,17 +97,46 @@ export function VoterCsvImport({ wardNumber, onComplete }: Props) {
       if (wardError || !ward) throw new Error("वार्ड " + wardNumber + " नहीं मिला।");
       const records = raw.map(({ record }) => ({ ...record, ward_id: ward.id }));
       const voterIds = records.map((record) => record.voter_id).filter((id): id is string => Boolean(id));
-      const { data: existingIds, error: idsError } = voterIds.length
-        ? await supabase.from("voters").select("voter_id").in("voter_id", voterIds)
-        : { data: [], error: null };
-      if (idsError) throw new Error("मौजूदा वोटर ID जाँची नहीं जा सकीं: " + idsError.message);
+      const existingIds: { voter_id: string | null; ward_id: string }[] = [];
+      for (let i = 0; i < voterIds.length; i += 100) {
+        const { data, error } = await supabase.from("voters").select("voter_id, ward_id").in("voter_id", voterIds.slice(i, i + 100));
+        if (error) throw new Error("मौजूदा वोटर ID जाँची नहीं जा सकीं: " + error.message);
+        existingIds.push(...(data ?? []));
+      }
+      const existingWardIds = [...new Set(existingIds.map((item) => item.ward_id))];
+      const wardNumbers = new Map<string, number>();
+      if (existingWardIds.length) {
+        const { data: wardRows, error: wardRowsError } = await supabase.from("wards").select("id, ward_number").in("id", existingWardIds);
+        if (wardRowsError) throw new Error("मौजूदा वोटर का वार्ड नहीं पता चल सका: " + wardRowsError.message);
+        for (const item of wardRows ?? []) wardNumbers.set(item.id, item.ward_number);
+      }
       const { data: existingSerials, error: serialError } = await supabase.from("voters").select("serial_no").eq("ward_id", ward.id);
       if (serialError) throw new Error("वार्ड की मौजूदा क्रम संख्या जाँची नहीं जा सकीं: " + serialError.message);
-      const knownIds = new Set((existingIds ?? []).map((item) => item.voter_id));
+      const existingIdWard = new Map(existingIds.map((item) => [(item.voter_id ?? "").trim().toUpperCase(), item.ward_id]));
       const knownSerials = new Set((existingSerials ?? []).map((item) => item.serial_no).filter((n): n is number => n !== null));
-      const fresh = records.filter((record) =>
-        (!record.voter_id || !knownIds.has(record.voter_id)) && !knownSerials.has(record.serial_no)
-      );
+      const seenDuringImport = new Set<string>();
+      const fresh: typeof records = [];
+      const skippedRows: SkippedRow[] = [];
+      raw.forEach(({ record, rowNumber }, index) => {
+        const normalizedId = (record.voter_id ?? "").trim().toUpperCase();
+        const existingWardId = normalizedId ? existingIdWard.get(normalizedId) : undefined;
+        if (normalizedId && existingWardId) {
+          const existingWard = wardNumbers.get(existingWardId);
+          skippedRows.push({ rowNumber, name: record.full_name, voterId: record.voter_id ?? "", reason: existingWard === wardNumber ? "यह वोटर ID इसी वार्ड में पहले से मौजूद है" : "यह वोटर ID वार्ड " + (existingWard ?? "अज्ञात") + " में पहले से मौजूद है" });
+          return;
+        }
+        if (normalizedId && seenDuringImport.has(normalizedId)) {
+          skippedRows.push({ rowNumber, name: record.full_name, voterId: record.voter_id ?? "", reason: "यही वोटर ID इसी CSV में पहले भी आ चुकी है" });
+          return;
+        }
+        if (normalizedId) seenDuringImport.add(normalizedId);
+        if (knownSerials.has(record.serial_no)) {
+          skippedRows.push({ rowNumber, name: record.full_name, voterId: record.voter_id ?? "", reason: "यह क्रम संख्या इसी वार्ड में पहले से मौजूद है" });
+          return;
+        }
+        fresh.push({ ...record, ward_id: ward.id });
+      });
+      setSkippedDetails(skippedRows);
       let inserted = 0;
       for (let i = 0; i < fresh.length; i += 100) {
         const batch = fresh.slice(i, i + 100);
@@ -135,7 +166,18 @@ export function VoterCsvImport({ wardNumber, onComplete }: Props) {
         <input type="file" accept=".csv,text/csv" className="hidden" disabled={busy} onChange={(e) => { const file = e.target.files?.[0]; if (file) void importFile(file); e.currentTarget.value = ""; }} />
       </label>
     </div>
-    {result && <div className="mt-4 flex items-start gap-2 rounded-lg bg-success/10 p-3 text-sm"><CheckCircle2 className="h-5 w-5 text-success" /><span>सफल: {result.inserted} · पहले से मौजूद/स्किप: {result.skipped}</span></div>}
+    {result && <div className="mt-4 space-y-3">
+      <div className="flex items-start gap-2 rounded-lg bg-success/10 p-3 text-sm"><CheckCircle2 className="h-5 w-5 text-success" /><span>सफल: {result.inserted} · पहले से मौजूद/स्किप: {result.skipped}</span></div>
+      {skippedDetails.length > 0 && <div className="rounded-lg border p-3">
+        <div className="mb-2 font-semibold text-sm">स्किप हुए रिकॉर्ड का विवरण</div>
+        <div className="max-h-72 overflow-auto">
+          <table className="w-full text-xs text-left">
+            <thead><tr><th className="p-2">CSV पंक्ति</th><th className="p-2">नाम</th><th className="p-2">वोटर ID</th><th className="p-2">कारण</th></tr></thead>
+            <tbody>{skippedDetails.map((item) => <tr key={item.rowNumber} className="border-t"><td className="p-2">{item.rowNumber}</td><td className="p-2">{item.name}</td><td className="p-2">{item.voterId || "—"}</td><td className="p-2">{item.reason}</td></tr>)}</tbody>
+          </table>
+        </div>
+      </div>}
+    </div>}
     <p className="mt-3 text-xs text-muted-foreground">पहले से मौजूद वोटर ID दोबारा नहीं जुड़ेंगी। अन्य वार्डों का डेटा नहीं बदलेगा।</p>
   </Card>;
 }

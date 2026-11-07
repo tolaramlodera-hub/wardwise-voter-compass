@@ -6,6 +6,16 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Props = { wardNumber: number; onDeleted: () => void };
 
+function errorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+    const code = "code" in error && typeof error.code === "string" ? " [" + error.code + "]" : "";
+    const details = "details" in error && typeof error.details === "string" ? " — " + error.details : "";
+    return error.message + code + details;
+  }
+  return fallback;
+}
+
 export function DeleteWardVoters({ wardNumber, onDeleted }: Props) {
   const [count, setCount] = useState<number | null>(null);
   const [wardId, setWardId] = useState<string | null>(null);
@@ -25,7 +35,7 @@ export function DeleteWardVoters({ wardNumber, onDeleted }: Props) {
       setWardId(ward.id);
       setCount(total ?? 0);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "रिकॉर्ड की संख्या नहीं मिल सकी");
+      toast.error("रिकॉर्ड की संख्या नहीं मिल सकी: " + errorMessage(error, "अज्ञात त्रुटि"));
       setWardId(null);
       setCount(null);
     } finally { setLoading(false); }
@@ -50,7 +60,7 @@ export function DeleteWardVoters({ wardNumber, onDeleted }: Props) {
       setCount(0);
       onDeleted();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "पुराना डेटा नहीं हट पाया");
+      toast.error("पुराना डेटा नहीं हट पाया: " + errorMessage(error, "अज्ञात त्रुटि"));
       await refreshCount();
     } finally { setBusy(false); }
   };

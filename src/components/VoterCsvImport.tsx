@@ -57,7 +57,7 @@ export function VoterCsvImport({ wardNumber, onComplete }: Props) {
       const serialIdx = find("क्रम संख्या", "क्रमांक", "serial_no", "serial", "srno");
       const voterIdx = find("मतदाता पहचान पत्र संख्या", "मतदाता पहचान पत्र", "वोटर आईडी", "voter_id", "epicno", "epic");
       const nameIdx = find("मतदाता का नाम", "मतदाता नाम", "नाम", "full_name", "name");
-      const relativeIdx = find("पिता/पति/माता का नाम", "पिता का नाम", "पति का नाम", "relative_name", "father_name");
+      const relativeIdx = find("पिता/पति का नाम", "पिता/पति/माता का नाम", "पिता का नाम", "पति का नाम", "relative_name", "father_name");
       const ageIdx = find("आयु", "उम्र", "age");
       const genderIdx = find("लिंग", "gender", "sex");
       const houseIdx = find("मकान संख्या", "मकान नंबर", "house_number", "house");

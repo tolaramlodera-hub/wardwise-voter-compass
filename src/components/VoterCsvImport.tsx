@@ -90,17 +90,6 @@ export function VoterCsvImport({ wardNumber, onComplete }: Props) {
         serials.add(record.serial_no);
       }
 
-      // A voter ID is globally unique. Keep the first occurrence in this CSV
-      // and skip later repeats so one duplicate cannot fail an entire batch.
-      const seenCsvVoterIds = new Set<string>();
-      const duplicateCsvVoterIds = new Set<string>();
-      for (const { record } of raw) {
-        if (!record.voter_id) continue;
-        const normalizedId = record.voter_id.trim().toUpperCase();
-        if (seenCsvVoterIds.has(normalizedId)) duplicateCsvVoterIds.add(normalizedId);
-        else seenCsvVoterIds.add(normalizedId);
-      }
-
       const supabase = getSupabaseBrowserClient();
       const { data: ward, error: wardError } = await supabase.from("wards").select("id").eq("ward_number", wardNumber).single();
       if (wardError || !ward) throw new Error("वार्ड " + wardNumber + " नहीं मिला।");

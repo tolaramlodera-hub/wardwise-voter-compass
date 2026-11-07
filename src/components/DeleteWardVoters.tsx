@@ -50,10 +50,16 @@ export function DeleteWardVoters({ wardNumber, onDeleted }: Props) {
       const supabase = getSupabaseBrowserClient();
       // First remove attendance history linked to voters in this ward, then remove
       // only these ward's voters. This satisfies attendance_voter_id_fkey.
-      const { data: wardVoters, error: voterListError } = await supabase
-        .from("voters").select("id").eq("ward_id", wardId);
-      if (voterListError) throw voterListError;
-      const voterIds = (wardVoters ?? []).map((voter) => voter.id);
+      const voterIds: string[] = [];
+      // Page through all voters; Supabase's default row limit must not leave
+      // attendance references behind on larger wards.
+      for (let offset = 0; ; offset += 1000) {
+        const { data: wardVoters, error: voterListError } = await supabase
+          .from("voters").select("id").eq("ward_id", wardId).range(offset, offset + 999);
+        if (voterListError) throw voterListError;
+        voterIds.push(...(wardVoters ?? []).map((voter) => voter.id));
+        if (!wardVoters || wardVoters.length < 1000) break;
+      }
       for (let i = 0; i < voterIds.length; i += 100) {
         const { error: attendanceDeleteError } = await supabase
           .from("attendance").delete().in("voter_id", voterIds.slice(i, i + 100));

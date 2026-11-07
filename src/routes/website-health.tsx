@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, Clock3, Database, ExternalLink, Github, Globe, HardDrive, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import * as Sentry from "@sentry/react";
 import { initializeBrowserSentry, isBrowserSentryInitialized } from "@/lib/sentry";
 import { AppShell, Card, StatCard, btnOutline } from "@/components/AppShell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";

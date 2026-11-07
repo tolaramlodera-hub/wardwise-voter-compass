@@ -1,20 +1,5 @@
 import * as Sentry from "@sentry/node";
 import "./lib/error-capture";
-
-const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
-if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    environment: import.meta.env.MODE,
-    sendDefaultPii: false,
-    tracesSampleRate: 0,
-    beforeSend(event) {
-      if (event.user) delete event.user;
-      return event;
-    },
-  });
-}
-
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
@@ -94,8 +79,6 @@ export default {
       });
       await Sentry.flush(2000);
       console.error(error);
-      Sentry.captureException(error);
-      await Sentry.flush(2000);
       return new Response(renderErrorPage(), {
         status: 500,
         headers: { "content-type": "text/html; charset=utf-8" },

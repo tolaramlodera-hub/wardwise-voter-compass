@@ -41,7 +41,8 @@ function normalize(value: string) { return value.trim().toLowerCase().replace(/[
 
 export function VoterCsvImport({ wardNumber, onComplete }: Props) {
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ inserted: number; skipped: number } | null>(null);\n  const [skippedDetails, setSkippedDetails] = useState<SkippedRow[]>([]);
+  const [result, setResult] = useState<{ inserted: number; skipped: number } | null>(null);
+  const [skippedDetails, setSkippedDetails] = useState<SkippedRow[]>([]);
 
   const importFile = async (file: File) => {
     setResult(null);

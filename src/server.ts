@@ -66,8 +66,61 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+async function handleAdminSentryTest(request: Request): Promise<Response> {
+  const json = (body: Record<string, unknown>, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    });
+  if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
+
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin) return json({ error: "Forbidden origin" }, 403);
+
+  const authorization = request.headers.get("authorization") ?? "";
+  const accessToken = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (!accessToken || !supabaseUrl || !supabaseKey) return json({ error: "Authentication required" }, 401);
+
+  try {
+    const authResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: { apikey: supabaseKey, authorization: `Bearer ${accessToken}` },
+    });
+    if (!authResponse.ok) return json({ error: "Valid login required" }, 401);
+    const user = await authResponse.json() as { id?: string };
+    if (!user.id) return json({ error: "Valid login required" }, 401);
+
+    const profileUrl = new URL(`${supabaseUrl}/rest/v1/profiles`);
+    profileUrl.searchParams.set("select", "role,is_active");
+    profileUrl.searchParams.set("user_id", `eq.${user.id}`);
+    profileUrl.searchParams.set("limit", "1");
+    const profileResponse = await fetch(profileUrl, {
+      headers: { apikey: supabaseKey, authorization: `Bearer ${accessToken}` },
+    });
+    if (!profileResponse.ok) return json({ error: "Admin authorization could not be verified" }, 403);
+    const profiles = await profileResponse.json() as Array<{ role?: string; is_active?: boolean }>;
+    if (profiles[0]?.role !== "admin" || profiles[0]?.is_active !== true) {
+      return json({ error: "Admin access required" }, 403);
+    }
+
+    Sentry.captureMessage("Wardwise server Sentry integration test", {
+      level: "error",
+      tags: { source: "website-health-server-test", test_event: "true" },
+      extra: { purpose: "Admin-triggered server delivery verification" },
+    });
+    const delivered = await Sentry.flush(5000);
+    if (!delivered) return json({ error: "Sentry queue flush was not confirmed" }, 502);
+    return json({ ok: true, message: "Server test event sent to Sentry" });
+  } catch (error) {
+    console.error("Admin Sentry test endpoint failed:", error);
+    return json({ error: "Server test could not be completed" }, 500);
+  }
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    if (new URL(request.url).pathname === "/api/admin/sentry-test") return handleAdminSentryTest(request);
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);

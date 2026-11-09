@@ -108,13 +108,21 @@ function Events() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     setBusy(true);
-    const { error } = await supabase.from("community_events").insert({
+    const { data: created, error } = await supabase.from("community_events").insert({
       name: String(f.get("name")), purpose: String(f.get("purpose")), event_at: new Date(String(f.get("event_at"))).toISOString(),
       place: String(f.get("place")), details: String(f.get("details") || ""), created_by: userId,
-    });
+      organizer_id: userId, status: "approved",
+    }).select("id").single();
+    if (!error && created?.id) {
+      const { error: memberError } = await supabase.from("event_members").upsert(
+        { event_id: created.id, user_id: userId, member_role: "organizer", is_active: true, appointed_by: userId },
+        { onConflict: "event_id,user_id" },
+      );
+      if (memberError) toast.error("इवेंट बन गया, लेकिन आयोजक सदस्यता नहीं जुड़ी: " + memberError.message);
+    }
     setBusy(false);
-    if (error) toast.error("इवेंट अनुरोध नहीं बना: " + error.message);
-    else { toast.success("इवेंट अनुमोदन के लिए भेज दिया गया"); setCreateOpen(false); await load(); }
+    if (error) toast.error("इवेंट नहीं बना: " + error.message);
+    else { toast.success("इवेंट तुरंत सक्रिय हो गया"); setCreateOpen(false); await load(); }
   };
 
   const reviewEvent = async (ev: EventRow, status: "approved" | "rejected") => {

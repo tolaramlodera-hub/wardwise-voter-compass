@@ -15,7 +15,7 @@ const nav = [
   { to: "/pdf-bw", label: "PDF B&W", icon: FileImage },
 ] as const;
 
-const mobileNav = [nav[0], nav[1], nav[2], nav[5], nav[7]];
+const mobileNav = [nav[0], nav[1], nav[2], nav[5], nav[7], nav[9]];
 
 export function AppShell({ title, children }: { title: string; children: ReactNode }) {
   const { pathname } = useLocation();
@@ -62,7 +62,7 @@ export function AppShell({ title, children }: { title: string; children: ReactNo
         <main className="flex-1 p-4 md:p-8">{children}</main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t bg-card md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t bg-card md:hidden">
         {mobileNav.map((n) => {
           const active = pathname === n.to;
           return (

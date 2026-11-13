@@ -1,6 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { LayoutDashboard, Map, Users, Vote, CheckCircle2, Clock, BarChart3, UserCog, ScrollText, LogOut, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Map, Users, Vote, CheckCircle2, Clock, BarChart3, UserCog, ScrollText, FileImage, LogOut, ShieldCheck } from "lucide-react";
 
 const nav = [
   { to: "/", label: "डैशबोर्ड", icon: LayoutDashboard },
@@ -12,6 +12,7 @@ const nav = [
   { to: "/wards", label: "वार्ड मैनेजमेंट", icon: Map },
   { to: "/users", label: "यूजर मैनेजमेंट", icon: UserCog },
   { to: "/audit", label: "Audit Log", icon: ScrollText },
+  { to: "/pdf-bw", label: "PDF B&W", icon: FileImage },
 ] as const;
 
 const mobileNav = [nav[0], nav[1], nav[2], nav[5], nav[7]];

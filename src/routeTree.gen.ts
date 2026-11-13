@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as EntryRouteImport } from './routes/entry'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PdfBwRouteImport } from './routes/pdf-bw'
 import { Route as PendingRouteImport } from './routes/pending'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as UsersRouteImport } from './routes/users'
@@ -38,6 +39,11 @@ const EntryRoute = EntryRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PdfBwRoute = PdfBwRouteImport.update({
+  id: '/pdf-bw',
+  path: '/pdf-bw',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PendingRoute = PendingRouteImport.update({
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/audit': typeof AuditRoute
   '/entry': typeof EntryRoute
   '/login': typeof LoginRoute
+  '/pdf-bw': typeof PdfBwRoute
   '/pending': typeof PendingRoute
   '/reports': typeof ReportsRoute
   '/users': typeof UsersRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/audit': typeof AuditRoute
   '/entry': typeof EntryRoute
   '/login': typeof LoginRoute
+  '/pdf-bw': typeof PdfBwRoute
   '/pending': typeof PendingRoute
   '/reports': typeof ReportsRoute
   '/users': typeof UsersRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/audit': typeof AuditRoute
   '/entry': typeof EntryRoute
   '/login': typeof LoginRoute
+  '/pdf-bw': typeof PdfBwRoute
   '/pending': typeof PendingRoute
   '/reports': typeof ReportsRoute
   '/users': typeof UsersRoute
@@ -115,6 +124,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/entry'
     | '/login'
+    | '/pdf-bw'
     | '/pending'
     | '/reports'
     | '/users'
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/entry'
     | '/login'
+    | '/pdf-bw'
     | '/pending'
     | '/reports'
     | '/users'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/entry'
     | '/login'
+    | '/pdf-bw'
     | '/pending'
     | '/reports'
     | '/users'
@@ -152,6 +164,7 @@ export interface RootRouteChildren {
   AuditRoute: typeof AuditRoute
   EntryRoute: typeof EntryRoute
   LoginRoute: typeof LoginRoute
+  PdfBwRoute: typeof PdfBwRoute
   PendingRoute: typeof PendingRoute
   ReportsRoute: typeof ReportsRoute
   UsersRoute: typeof UsersRoute
@@ -188,6 +201,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pdf-bw': {
+      id: '/pdf-bw'
+      path: '/pdf-bw'
+      fullPath: '/pdf-bw'
+      preLoaderRoute: typeof PdfBwRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pending': {
@@ -240,6 +260,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuditRoute: AuditRoute,
   EntryRoute: EntryRoute,
   LoginRoute: LoginRoute,
+  PdfBwRoute: PdfBwRoute,
   PendingRoute: PendingRoute,
   ReportsRoute: ReportsRoute,
   UsersRoute: UsersRoute,

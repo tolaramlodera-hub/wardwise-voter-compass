@@ -98,14 +98,14 @@ function PdfBw() {
   return (
     <AppShell title="PDF ब्लैक & व्हाइट कन्वर्टर">
       <div className="space-y-4">
-        <Card>
+        <Card className="p-4">
           <p className="mb-3 text-sm text-muted-foreground">रंगीन PDF चुनें — बैकग्राउंड सफ़ेद और सारे अक्षर गहरे काले हो जाएंगे। फ़ाइल आपके फ़ोन/कंप्यूटर में ही प्रोसेस होती है, कहीं भेजी नहीं जाती।</p>
           <input type="file" accept="application/pdf" onChange={(e) => e.target.files?.[0] && open(e.target.files[0])}
             className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:text-primary-foreground" />
           {pages > 0 && <p className="mt-2 text-sm">कुल पन्ने: {pages}</p>}
         </Card>
         {file && (
-          <Card>
+          <Card className="p-4">
             <label className="text-sm font-medium">अक्षरों का गाढ़ापन: {threshold}</label>
             <input type="range" min={60} max={240} value={threshold} className="w-full accent-primary"
               onChange={(e) => setThreshold(+e.target.value)} onMouseUp={() => makePreview(threshold)} onTouchEnd={() => makePreview(threshold)} onKeyUp={() => makePreview(threshold)} />
@@ -117,7 +117,7 @@ function PdfBw() {
           </Card>
         )}
         {preview && (
-          <Card>
+          <Card className="p-4">
             <p className="mb-2 text-sm font-medium">पहले पन्ने का प्रीव्यू</p>
             <img src={preview} alt="B&W preview" className="w-full rounded border" />
           </Card>

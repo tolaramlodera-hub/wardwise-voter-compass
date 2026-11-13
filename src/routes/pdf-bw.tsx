@@ -27,7 +27,7 @@ function binarize(ctx: CanvasRenderingContext2D, w: number, h: number, threshold
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
   for (let i = 0; i < d.length; i += 4) {
-    const r = d[i], g = d[i + 1], b = d[i + 2];
+    const r = d[i]!, g = d[i + 1]!, b = d[i + 2]!;
     // darkest channel catches coloured text; luminance for grey
     const lum = 0.299 * r + 0.587 * g + 0.114 * b;
     const v = Math.min(lum, (r + g + b) / 3 + 20) < threshold ? 0 : 255;

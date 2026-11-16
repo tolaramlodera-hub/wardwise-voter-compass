@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { AppShell, Card } from "@/components/AppShell";
+import { smartWhite } from "@/lib/smartWhite";
 
 export const Route = createFileRoute("/pdf-bw")({
   head: () => ({
@@ -37,7 +38,8 @@ function binarize(ctx: CanvasRenderingContext2D, w: number, h: number, threshold
   ctx.putImageData(img, 0, 0);
 }
 
-async function renderPage(pdf: any, n: number, scale: number, threshold: number) {
+type Mode = "smart" | "standard";
+async function renderPage(pdf: any, n: number, scale: number, threshold: number, mode: Mode = "smart") {
   const page = await pdf.getPage(n);
   const vp = page.getViewport({ scale });
   const c = document.createElement("canvas");
@@ -47,7 +49,11 @@ async function renderPage(pdf: any, n: number, scale: number, threshold: number)
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, c.width, c.height);
   await page.render({ canvasContext: ctx, viewport: vp, canvas: c }).promise;
-  binarize(ctx, c.width, c.height, threshold);
+  if (mode === "smart") {
+    const img = ctx.getImageData(0, 0, c.width, c.height);
+    smartWhite(img.data, c.width, c.height, { dpi: 72 * scale, bgTolerance: Math.round(threshold / 4) });
+    ctx.putImageData(img, 0, 0);
+  } else binarize(ctx, c.width, c.height, threshold);
   return { c, wPt: page.getViewport({ scale: 1 }).width, hPt: page.getViewport({ scale: 1 }).height };
 }
 
@@ -58,6 +64,7 @@ function PdfBw() {
   const [pages, setPages] = useState(0);
   const [progress, setProgress] = useState("");
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<Mode>("smart");
   const pdfRef = useRef<any>(null);
 
   async function open(f: File) {
@@ -65,12 +72,12 @@ function PdfBw() {
     const pdfjs = await loadPdfjs();
     const pdf = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
     pdfRef.current = pdf; setPages(pdf.numPages);
-    await makePreview(threshold);
+    await makePreview(threshold, mode);
   }
 
-  async function makePreview(t: number) {
+  async function makePreview(t: number, m: Mode = mode) {
     if (!pdfRef.current) return;
-    const { c } = await renderPage(pdfRef.current, 1, 1.5, t);
+    const { c } = await renderPage(pdfRef.current, 1, 1.5, t, m);
     setPreview(c.toDataURL("image/png")); setProgress("");
   }
 
@@ -82,7 +89,7 @@ function PdfBw() {
       let doc: any = null;
       for (let i = 1; i <= pages; i++) {
         setProgress(`पन्ना ${i} / ${pages} साफ़ हो रहा है...`);
-        const { c, wPt, hPt } = await renderPage(pdfRef.current, i, 2.5, threshold);
+        const { c, wPt, hPt } = await renderPage(pdfRef.current, i, 2.5, threshold, mode);
         const o = wPt > hPt ? "l" : "p";
         if (!doc) doc = new jsPDF({ orientation: o, unit: "pt", format: [wPt, hPt], compress: true });
         else doc.addPage([wPt, hPt], o);
@@ -106,6 +113,13 @@ function PdfBw() {
         </Card>
         {file && (
           <Card className="p-4">
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              {([["smart", "स्मार्ट सफ़ेद (रंग सुरक्षित)"], ["standard", "पुराना B&W"]] as const).map(([m, l]) => (
+                <button key={m} onClick={() => { setMode(m); makePreview(threshold, m); }}
+                  className={`rounded-md border px-3 py-2 text-sm ${mode === m ? "border-primary bg-primary text-primary-foreground" : "bg-background"}`}>{l}</button>
+              ))}
+            </div>
+            {mode === "smart" && <p className="mb-2 text-xs text-muted-foreground">0.5×1 इंच या बड़े सफ़ेद हिस्से जैसे हैं वैसे रहेंगे • बाहरी रंगीन बैकग्राउंड सफ़ेद • काले अक्षर काले • रंगीन अक्षर अपने रंग में</p>}
             <label className="text-sm font-medium">अक्षरों का गाढ़ापन: {threshold}</label>
             <input type="range" min={60} max={240} value={threshold} className="w-full accent-primary"
               onChange={(e) => setThreshold(+e.target.value)} onMouseUp={() => makePreview(threshold)} onTouchEnd={() => makePreview(threshold)} onKeyUp={() => makePreview(threshold)} />

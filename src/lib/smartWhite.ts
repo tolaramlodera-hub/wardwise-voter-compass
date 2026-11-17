@@ -80,11 +80,27 @@ export function smartWhite(d: Uint8ClampedArray, w: number, h: number, opt: Smar
   const mask = protectedWhiteMask(d, w, h, opt.dpi);
   const bgs = backgroundColours(d, mask);
   const tol2 = tol * tol;
+  // Gradient-aware outer background: flood from page border through smooth colour steps.
+  const n = w * h, outer = new Uint8Array(n), st = new Int32Array(n);
+  let sp = 0;
+  const step2 = 14 * 14;
+  for (let x = 0; x < w; x++) for (const y of [0, h - 1]) { const q = y * w + x; if (!mask[q] && !outer[q]) { outer[q] = 1; st[sp++] = q; } }
+  for (let y = 0; y < h; y++) for (const x of [0, w - 1]) { const q = y * w + x; if (!mask[q] && !outer[q]) { outer[q] = 1; st[sp++] = q; } }
+  while (sp) {
+    const q = st[--sp]!, qi = q * 4, x = q % w;
+    const nb = [x > 0 ? q - 1 : -1, x < w - 1 ? q + 1 : -1, q - w, q + w];
+    for (const t of nb) {
+      if (t < 0 || t >= n || outer[t] || mask[t]) continue;
+      const ti = t * 4, dr = d[ti]! - d[qi]!, dg = d[ti + 1]! - d[qi + 1]!, db = d[ti + 2]! - d[qi + 2]!;
+      if (dr * dr + dg * dg + db * db > step2) continue;
+      outer[t] = 1; st[sp++] = t;
+    }
+  }
   for (let p = 0, i = 0; p < mask.length; p++, i += 4) {
     if (mask[p]) continue; // protected white panel: untouched
     const r = d[i]!, g = d[i + 1]!, b = d[i + 2]!;
-    let isBg = false;
-    for (const c of bgs) {
+    let isBg = outer[p] === 1;
+    if (!isBg) for (const c of bgs) {
       const dr = r - c[0], dg = g - c[1], db = b - c[2];
       if (dr * dr + dg * dg + db * db <= tol2) { isBg = true; break; }
     }

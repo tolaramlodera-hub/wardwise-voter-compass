@@ -70,7 +70,7 @@ function PdfBw() {
   async function open(f: File) {
     setFile(f); setPreview(null); setProgress("PDF खुल रही है...");
     const pdfjs = await loadPdfjs();
-    const pdf = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
+    const pdf = await pdfjs.getDocument({ data: await f.arrayBuffer(), wasmUrl: "/pdfjs/wasm/", cMapUrl: "/pdfjs/cmaps/", cMapPacked: true, standardFontDataUrl: "/pdfjs/standard_fonts/" } as any).promise;
     pdfRef.current = pdf; setPages(pdf.numPages);
     await makePreview(threshold, mode);
   }

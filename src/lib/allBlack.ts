@@ -52,7 +52,7 @@ export function allBlack(d: Uint8ClampedArray, w: number, h: number, dpi: number
   const core = new Int32Array(regs.length);
   for (let y = r; y < h - r; y += 2) for (let x = r; x < w - r; x += 2) {
     const q = y * w + x, L = lab[q]!;
-    if (lab[q - r] === L && lab[q + r] === L && lab[q - r * w] === L && lab[q + r * w] === L) core[L]++;
+    if (lab[q - r] === L && lab[q + r] === L && lab[q - r * w] === L && lab[q + r * w] === L) core[L] = core[L]! + 1;
   }
   const thick = (id: number) => core[id]! >= 20;
   // thin pixel counts per bbox via integral image

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { AppShell, Card } from "@/components/AppShell";
 import { smartWhite } from "@/lib/smartWhite";
+import { allBlack } from "@/lib/allBlack";
 
 export const Route = createFileRoute("/pdf-bw")({
   head: () => ({
@@ -38,8 +39,8 @@ function binarize(ctx: CanvasRenderingContext2D, w: number, h: number, threshold
   ctx.putImageData(img, 0, 0);
 }
 
-type Mode = "smart" | "standard";
-async function renderPage(pdf: any, n: number, scale: number, threshold: number, mode: Mode = "smart") {
+type Mode = "black" | "smart" | "standard";
+async function renderPage(pdf: any, n: number, scale: number, threshold: number, mode: Mode = "black") {
   const page = await pdf.getPage(n);
   const vp = page.getViewport({ scale });
   const c = document.createElement("canvas");
@@ -49,7 +50,11 @@ async function renderPage(pdf: any, n: number, scale: number, threshold: number,
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, c.width, c.height);
   await page.render({ canvasContext: ctx, viewport: vp, canvas: c }).promise;
-  if (mode === "smart") {
+  if (mode === "black") {
+    const img = ctx.getImageData(0, 0, c.width, c.height);
+    allBlack(img.data, c.width, c.height, 72 * scale, threshold);
+    ctx.putImageData(img, 0, 0);
+  } else if (mode === "smart") {
     const img = ctx.getImageData(0, 0, c.width, c.height);
     smartWhite(img.data, c.width, c.height, { dpi: 72 * scale, bgTolerance: Math.round(threshold / 4) });
     ctx.putImageData(img, 0, 0);
@@ -64,7 +69,7 @@ function PdfBw() {
   const [pages, setPages] = useState(0);
   const [progress, setProgress] = useState("");
   const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState<Mode>("smart");
+  const [mode, setMode] = useState<Mode>("black");
   const pdfRef = useRef<any>(null);
 
   async function open(f: File) {
@@ -113,8 +118,8 @@ function PdfBw() {
         </Card>
         {file && (
           <Card className="p-4">
-            <div className="mb-3 grid grid-cols-2 gap-2">
-              {([["smart", "स्मार्ट सफ़ेद (रंग सुरक्षित)"], ["standard", "पुराना B&W"]] as const).map(([m, l]) => (
+            <div className="mb-3 grid grid-cols-3 gap-2">
+              {([["black", "सफ़ेद पेज, सब अक्षर काले"], ["smart", "स्मार्ट सफ़ेद (रंग सुरक्षित)"], ["standard", "पुराना B&W"]] as const).map(([m, l]) => (
                 <button key={m} onClick={() => { setMode(m); makePreview(threshold, m); }}
                   className={`rounded-md border px-3 py-2 text-sm ${mode === m ? "border-primary bg-primary text-primary-foreground" : "bg-background"}`}>{l}</button>
               ))}
